@@ -1,0 +1,94 @@
+{
+  "id": "printing-holes",
+  "name": "3D Printing Holes",
+  "version": "0.1.0",
+  "description": "Holes made for 3D printing. Teardrop: turns selected sketch circles into teardrops (45 deg overhang, tip follows the radius) so holes in walls print without sagging.",
+  "capabilities": ["commands@0.1"],
+  "runtime": {
+    "module": "plugin.wasm",
+    "entries": [
+      {
+        "name": "teardrop",
+        "effect": "edit",
+        "slots": [
+          { "kind": "ribbon", "name": "Sketch" },
+          { "kind": "menu", "name": "Sketch" }
+        ],
+        "input_schema": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "circles": {
+              "type": "array",
+              "title": "Circles",
+              "description": "Sketch circles to convert: ids such as \"c1\" or {id, sketch}. Empty: the circles currently selected.",
+              "items": {
+                "anyOf": [
+                  { "type": "string" },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": { "type": "string" },
+                      "sketch": { "type": ["integer", "string"] }
+                    },
+                    "required": ["id"]
+                  }
+                ]
+              },
+              "default": []
+            },
+            "sketch": {
+              "type": ["integer", "string", "null"],
+              "title": "Sketch",
+              "description": "Sketch id or name when the circles are given by id and no sketch is open.",
+              "default": null
+            },
+            "up": {
+              "type": ["string", "number"],
+              "title": "Up",
+              "description": "Which way is up (where the tip points): auto = world +Z (the print direction) projected into the sketch, or +x, -x, +y, -y, or an angle in degrees from sketch X.",
+              "default": "auto"
+            },
+            "overhang_angle": {
+              "type": "number",
+              "title": "Overhang angle (deg)",
+              "description": "Steepest overhang from the horizontal; the tip lies at r / cos(angle) from the centre (45 deg: r * sqrt(2)).",
+              "exclusiveMinimum": 0,
+              "exclusiveMaximum": 90,
+              "default": 45
+            },
+            "tip_height": {
+              "type": ["string", "number", "null"],
+              "title": "Tip height",
+              "description": "Override: distance from the centre to the tip, a number in mm or an expression where r is the radius (e.g. \"1.3*r\"). Empty: from the overhang angle.",
+              "default": ""
+            },
+            "flat_top": {
+              "type": ["string", "number", "null"],
+              "title": "Flat top at",
+              "description": "Optional: cut the tip flat at this distance from the centre, a number in mm or an expression in r (e.g. \"r\" or \"1.1*r\"). Empty: pointed tip.",
+              "default": ""
+            }
+          }
+        }
+      }
+    ],
+    "commands": [
+      "selection.get",
+      "document.inspect",
+      "expr.evaluate",
+      "sketch.edit",
+      "sketch.finish",
+      "sketch.inspect",
+      "sketch.solve",
+      "sketch.line",
+      "sketch.arc.center_point",
+      "sketch.delete",
+      "sketch.dimension",
+      "sketch.constraint.tangent",
+      "sketch.constraint.coincident",
+      "sketch.constraint.perpendicular",
+      "sketch.constraint.horizontal_vertical"
+    ]
+  }
+}

@@ -1,0 +1,5 @@
+[toolchain]
+# The GNU host toolchain brings its own linker, so no Visual Studio Build Tools are needed.
+channel = "stable-x86_64-pc-windows-gnu"
+targets = ["wasm32-unknown-unknown"]
+profile = "minimal"
