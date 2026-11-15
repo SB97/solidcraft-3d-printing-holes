@@ -12,8 +12,15 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
+    env:
+      # The runner has other MinGW gcc builds on PATH, which the GNU toolchain of
+      # rust-toolchain.toml would link with; MSVC is installed there, so use it.
+      RUSTUP_TOOLCHAIN: stable-x86_64-pc-windows-msvc
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+
+      - name: Rust toolchain
+        run: rustup toolchain install stable-x86_64-pc-windows-msvc --profile minimal --target wasm32-unknown-unknown
 
       - name: Tag matches manifest version
         shell: pwsh
@@ -27,7 +34,16 @@ jobs:
           tool: wasm-tools
 
       - name: Test
-        run: cargo test
+        shell: pwsh
+        run: |
+          $out = cargo test 2>&1 | Out-String
+          $code = $LASTEXITCODE
+          Write-Output $out
+          if ($code -ne 0) {
+            $tail = ($out -split "`r?`n" | Select-Object -Last 40) -join '%0A'
+            Write-Output "::error title=cargo test failed::$tail"
+            exit $code
+          }
 
       - name: Build
         shell: powershell
