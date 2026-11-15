@@ -11,6 +11,8 @@ the sag, and the hole stays practically round. The classic 45° teardrop is stil
 
 ## Usage
 
+![Select a circle, run Teardrop, cut the hole, change the radius parameter](docs/usage.gif)
+
 1. In a sketch, draw a normal circle and dimension it, e.g. radius `hole_r`.
 2. Press **Esc** to end the active sketch tool and select the circle (hold Shift for several).
 3. Open **Plugins › 3D Printing Holes › Teardrop…** (or **Model › Plugins › Teardrop** in the ribbon).
