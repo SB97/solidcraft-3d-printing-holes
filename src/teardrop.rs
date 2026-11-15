@@ -28,9 +28,16 @@ struct Options {
     sketch: Option<Value>,
     up: UpSpec,
     tip: TipSpec,
-    overhang: f64,
     flat: Option<String>,
+    /// Warn when `up: auto` meets a horizontal sketch and falls back to sketch +Y.
+    warn_horizontal: bool,
+    /// No ids given: convert every circle of the open sketch instead of the selection.
+    all_in_sketch: bool,
 }
+
+/// Default tip: this many percent of the radius above the circle. Enough to bridge the
+/// sagging top of a printed hole without changing its shape much.
+const DEFAULT_TIP_EXTRA: f64 = 5.0;
 
 #[derive(Debug, Clone, PartialEq)]
 struct Target {
@@ -85,29 +92,70 @@ fn parse_options(params: &Value) -> Result<Options> {
             geometry::parse_up(&n.to_string()).map_err(|e| Error::input("up", e))?,
         ),
         Some(Value::String(s)) if s.trim().is_empty() || s.trim().eq_ignore_ascii_case("auto") => UpSpec::Auto,
+        // The form's dropdown: "angle" takes the direction from the separate `up_angle` field.
+        Some(Value::String(s)) if s.trim().eq_ignore_ascii_case("angle") => {
+            let a = match params.get("up_angle") {
+                None | Some(Value::Null) => 90.0,
+                Some(v) => v
+                    .as_f64()
+                    .ok_or_else(|| Error::input("up_angle", "must be a number of degrees"))?,
+            };
+            UpSpec::Explicit(geometry::parse_up(&a.to_string()).map_err(|e| Error::input("up_angle", e))?)
+        }
         Some(Value::String(s)) => UpSpec::Explicit(geometry::parse_up(s).map_err(|e| Error::input("up", e))?),
         Some(_) => return Err(Error::input("up", "must be auto, +x, -x, +y, -y or an angle in degrees")),
     };
+    // The tip, most specific first: an explicit height, an overhang angle (scripts only: the
+    // classic 45° teardrop), else a tip a few percent of the radius above the circle.
     let overhang = match params.get("overhang_angle") {
-        None | Some(Value::Null) => 45.0,
+        None | Some(Value::Null) => None,
+        Some(v) => Some(
+            v.as_f64()
+                .ok_or_else(|| Error::input("overhang_angle", "must be a number of degrees"))?,
+        ),
+    };
+    if let Some(a) = overhang {
+        if !(a > 0.0 && a < 90.0) {
+            return Err(Error::input("overhang_angle", "must be between 0 and 90 degrees"));
+        }
+    }
+    let extra = match params.get("tip_extra") {
+        None | Some(Value::Null) => DEFAULT_TIP_EXTRA,
         Some(v) => v
             .as_f64()
-            .ok_or_else(|| Error::input("overhang_angle", "must be a number of degrees"))?,
+            .ok_or_else(|| Error::input("tip_extra", "must be a number (percent of the radius)"))?,
     };
-    if !(overhang > 0.0 && overhang < 90.0) {
-        return Err(Error::input("overhang_angle", "must be between 0 and 90 degrees"));
+    if !(extra > 0.0) {
+        return Err(Error::input("tip_extra", "must be more than 0 % of the radius"));
     }
-    let tip = match expr_field(params, "tip_height")? {
-        None => TipSpec::Angle(overhang),
-        Some(e) => TipSpec::Height(e),
+    let tip = match (expr_field(params, "tip_height")?, overhang) {
+        (Some(e), _) => TipSpec::Height(e),
+        (None, Some(a)) => TipSpec::Angle(a),
+        (None, None) => TipSpec::Height(format!("{} * r", num_fmt(1.0 + extra / 100.0))),
+    };
+    let warn_horizontal = match params.get("warn_horizontal") {
+        None | Some(Value::Null) => true,
+        Some(v) => v
+            .as_bool()
+            .ok_or_else(|| Error::input("warn_horizontal", "must be true or false"))?,
+    };
+    let all_in_sketch = match params.get("scope") {
+        None | Some(Value::Null) => false,
+        Some(Value::String(s)) => match s.trim().to_ascii_lowercase().as_str() {
+            "" | "selected" | "selection" => false,
+            "all" | "all in sketch" => true,
+            _ => return Err(Error::input("scope", "must be selected or all in sketch")),
+        },
+        Some(_) => return Err(Error::input("scope", "must be selected or all in sketch")),
     };
     Ok(Options {
+        all_in_sketch,
         circles,
         sketch: params.get("sketch").cloned().filter(|s| !s.is_null()),
         up,
         tip,
-        overhang,
         flat: expr_field(params, "flat_top")?,
+        warn_horizontal,
     })
 }
 
@@ -186,26 +234,49 @@ fn evaluate(host: &mut dyn Host, field: &str, expr: &str) -> Result<f64> {
 
 /// Find the sketch to work in and the circles to convert.
 /// The sketch to work in, the curve ids, and whether they came from the selection.
+/// Why the selection gave no circle, with what it did hold, so a user can tell what went wrong.
+fn no_circle_selected(items: &[Value]) -> String {
+    let what = if items.is_empty() {
+        "nothing is selected".to_string()
+    } else {
+        let kinds: Vec<String> = items
+            .iter()
+            .take(5)
+            .map(|it| {
+                let kind = it.get("kind").or_else(|| it.get("type")).and_then(Value::as_str).unwrap_or("?");
+                match it.get("entity").and_then(Value::as_str) {
+                    Some(e) => format!("{kind} ({e})"),
+                    None => kind.to_string(),
+                }
+            })
+            .collect();
+        format!("the selection holds {}: {}", items.len(), kinds.join(", "))
+    };
+    format!(
+        "no sketch circle selected ({what}). Press Esc to end the active sketch tool, click the circles, then run; or set Circles to `all in sketch`"
+    )
+}
+
 fn resolve_targets(host: &mut dyn Host, opts: &Options) -> Result<(Option<Value>, Vec<String>, bool)> {
     let mut targets = opts.circles.clone();
     let from_selection = targets.is_empty();
     if from_selection {
         let sel = host.run("selection.get", &json!({"detail": true}))?;
-        for it in sel.get("items").and_then(Value::as_array).into_iter().flatten() {
+        let items = sel.get("items").and_then(Value::as_array).cloned().unwrap_or_default();
+        for it in &items {
             let kind = it.get("kind").or_else(|| it.get("type")).and_then(Value::as_str);
             // `entity` may be missing (plugins run on a scratch copy): circles are checked later.
             let entity = it.get("entity").and_then(Value::as_str);
-            if kind == Some("sketch_curve") && entity.is_none_or(|e| e == "circle") {
-                if let Some(id) = it.get("id").and_then(Value::as_str) {
+            // A curve of another sketch than the one being edited comes as `external_sketch_curve`.
+            let curve = matches!(kind, Some("sketch_curve") | Some("external_sketch_curve"));
+            if curve && entity.is_none_or(|e| e == "circle") {
+                if let Some(id) = it.get("id").or_else(|| it.get("curve")).and_then(Value::as_str) {
                     targets.push(Target { curve: id.into(), sketch: it.get("sketch").cloned() });
                 }
             }
         }
         if targets.is_empty() {
-            return Err(Error::input(
-                "circles",
-                "select one or more sketch circles first (or pass their ids in `circles`)",
-            ));
+            return Err(Error::input("circles", no_circle_selected(&items)));
         }
     }
     let mut sketch = opts.sketch.clone();
@@ -229,12 +300,20 @@ fn resolve_targets(host: &mut dyn Host, opts: &Options) -> Result<(Option<Value>
     Ok((sketch, ids, from_selection))
 }
 
-/// Make sure the target sketch is the active one; returns whether we opened it.
-fn activate(host: &mut dyn Host, sketch: &Option<Value>) -> Result<bool> {
+/// What `activate` changed, so `run` can put the editing state back afterwards.
+struct Activation {
+    /// We opened the target sketch, so we finish it again.
+    opened: bool,
+    /// Another sketch was being edited: we finished it, so we re-open it.
+    reopen: Option<Value>,
+}
+
+/// Make sure the target sketch is the active one.
+fn activate(host: &mut dyn Host, sketch: &Option<Value>) -> Result<Activation> {
     let doc = host.run("document.inspect", &json!({"timeline": false, "bodies": false, "measure": false}))?;
     let active = doc.get("active_sketch").filter(|v| !v.is_null()).cloned();
     match (sketch, active) {
-        (None, Some(_)) => Ok(false),
+        (None, Some(_)) => Ok(Activation { opened: false, reopen: None }),
         (None, None) => Err(Error::input("sketch", "open a sketch, or select circles in one")),
         (Some(want), Some(have)) => {
             let same = want == &have
@@ -245,14 +324,17 @@ fn activate(host: &mut dyn Host, sketch: &Option<Value>) -> Result<bool> {
                     .flatten()
                     .any(|s| s.get("id") == Some(&have) && s.get("name") == Some(want));
             if same {
-                Ok(false)
+                Ok(Activation { opened: false, reopen: None })
             } else {
-                Err(Error::input("sketch", "the circles are in another sketch than the one being edited; finish it first"))
+                // The circles are in another sketch than the one being edited: switch to it.
+                host.run("sketch.finish", &json!({}))?;
+                host.run("sketch.edit", &json!({"sketch": want}))?;
+                Ok(Activation { opened: true, reopen: Some(have) })
             }
         }
         (Some(want), None) => {
             host.run("sketch.edit", &json!({"sketch": want}))?;
-            Ok(true)
+            Ok(Activation { opened: true, reopen: None })
         }
     }
 }
@@ -323,6 +405,7 @@ fn convert(host: &mut dyn Host, opts: &Options, up_spec: &UpSpec, id: &str) -> R
     let sk = host.run("sketch.inspect", &json!({}))?;
     let info = circle_info(&sk, id)?;
     let _ = info.index;
+    let mut warnings: Vec<String> = Vec::new();
     let up = match up_spec {
         UpSpec::Explicit(v) => *v,
         UpSpec::Auto => {
@@ -331,9 +414,19 @@ fn convert(host: &mut dyn Host, opts: &Options, up_spec: &UpSpec, id: &str) -> R
                 vec3(plane.and_then(|p| p.get("x_dir"))),
                 vec3(plane.and_then(|p| p.get("y_dir"))),
             );
+            // The design's orientation need not be the print orientation, so a horizontal
+            // sketch is no error: the tip goes to sketch +Y, with a warning one can turn off.
             match (x, y) {
-                (Some(x), Some(y)) => geometry::auto_up(x, y).map_err(|e| Error::input("up", e))?,
-                _ => return Err(Error::input("up", "the sketch reports no plane; set `up` explicitly")),
+                (Some(x), Some(y)) => geometry::auto_up(x, y).unwrap_or_else(|| {
+                    if opts.warn_horizontal {
+                        warnings.push(format!(
+                            "`{id}`: the sketch is horizontal, so world +Z gives no direction; the tip \
+                             points to sketch +Y. Set Up if the part prints in another orientation."
+                        ));
+                    }
+                    Vec2::new(0.0, 1.0)
+                }),
+                _ => return Err(Error::input("up", "the sketch reports no plane; set Up to +x, -x, +y, -y or angle")),
             }
         }
     };
@@ -349,9 +442,10 @@ fn convert(host: &mut dyn Host, opts: &Options, up_spec: &UpSpec, id: &str) -> R
         TipSpec::Height(e) => Some(substitute_r(e, &r_expr)),
     };
     let flat_expr = opts.flat.as_ref().map(|e| substitute_r(e, &r_expr));
-    let tip = match &tip_expr {
-        None => Tip::Angle(opts.overhang),
-        Some(e) => Tip::Height(evaluate(host, "tip_height", e)?),
+    let tip = match (&opts.tip, &tip_expr) {
+        (_, Some(e)) => Tip::Height(evaluate(host, "tip_height", e)?),
+        (TipSpec::Angle(a), None) => Tip::Angle(*a),
+        (TipSpec::Height(_), None) => unreachable!("a height always has an expression"),
     };
     let flat = match &flat_expr {
         None => None,
@@ -415,7 +509,6 @@ fn convert(host: &mut dyn Host, opts: &Options, up_spec: &UpSpec, id: &str) -> R
 
     // 4. Swap the circle for the arc, keeping its size dimension (and so its parameter).
     host.run("sketch.delete", &json!({"entities": [id]}))?;
-    let mut warnings: Vec<String> = Vec::new();
     match &info.size_dim {
         Some((ty, e)) => {
             host.run("sketch.dimension", &json!({"entities": [arc], "type": ty, "value": e}))?;
@@ -501,8 +594,24 @@ fn convert(host: &mut dyn Host, opts: &Options, up_spec: &UpSpec, id: &str) -> R
 
 pub fn run(host: &mut dyn Host, params: &Value) -> Result<Value> {
     let opts = parse_options(params)?;
-    let (sketch, mut ids, from_selection) = resolve_targets(host, &opts)?;
-    let opened = activate(host, &sketch)?;
+    let all = opts.circles.is_empty() && opts.all_in_sketch;
+    let (sketch, mut ids, from_selection) =
+        if all { (opts.sketch.clone(), Vec::new(), false) } else { resolve_targets(host, &opts)? };
+    let act = activate(host, &sketch)?;
+    if all {
+        let sk = host.run("sketch.inspect", &json!({}))?;
+        ids = sk
+            .get("curves")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|c| c.get("id").and_then(Value::as_str).map(String::from))
+            .filter(|id| circle_info(&sk, id).is_ok())
+            .collect();
+        if ids.is_empty() {
+            return Err(Error::input("scope", "the open sketch has no (non-construction) circle"));
+        }
+    }
     if from_selection {
         // Keep only the selected curves that are real circles; other selected curves are ignored.
         let sk = host.run("sketch.inspect", &json!({}))?;
@@ -513,11 +622,18 @@ pub fn run(host: &mut dyn Host, params: &Value) -> Result<Value> {
     }
     let mut done = Vec::new();
     for id in &ids {
-        done.push(convert(host, &opts, &opts.up, id)?);
+        let out = convert(host, &opts, &opts.up, id)?;
+        for w in out["warnings"].as_array().into_iter().flatten().filter_map(Value::as_str) {
+            host.warn(&format!("teardrop: {w}"));
+        }
         host.log(&format!("teardrop: converted {id}"));
+        done.push(out);
     }
-    if opened {
+    if act.opened {
         host.run("sketch.finish", &json!({}))?;
+    }
+    if let Some(prev) = act.reopen {
+        host.run("sketch.edit", &json!({"sketch": prev}))?;
     }
     Ok(json!({"converted": done}))
 }
@@ -538,14 +654,55 @@ mod tests {
     fn options_defaults() {
         let o = parse_options(&json!({})).unwrap();
         assert_eq!(o.up, UpSpec::Auto);
-        assert_eq!(o.tip, TipSpec::Angle(45.0));
-        assert!(o.flat.is_none() && o.circles.is_empty());
+        assert_eq!(o.tip, TipSpec::Height("1.05 * r".into()));
+        assert!(o.flat.is_none() && o.circles.is_empty() && o.warn_horizontal);
         let o = parse_options(&json!({"circles": ["c1", {"id": "c4", "sketch": 2}], "tip_height": "", "flat_top": 3, "up": "+x"})).unwrap();
         assert_eq!(o.circles.len(), 2);
-        assert_eq!(o.tip, TipSpec::Angle(45.0));
+        assert_eq!(o.tip, TipSpec::Height("1.05 * r".into()));
         assert_eq!(o.flat.as_deref(), Some("3 mm"));
         assert_eq!(o.up, UpSpec::Explicit(Vec2::new(1.0, 0.0)));
         assert!(parse_options(&json!({"overhang_angle": 95})).is_err());
         assert!(parse_options(&json!({"up": "oben"})).is_err());
+    }
+
+    #[test]
+    fn tip_precedence() {
+        // tip_extra in percent of r.
+        let o = parse_options(&json!({"tip_extra": 12.5})).unwrap();
+        assert_eq!(o.tip, TipSpec::Height("1.125 * r".into()));
+        assert!(parse_options(&json!({"tip_extra": 0})).is_err());
+        // An overhang angle (scripts) beats tip_extra, an explicit height beats both.
+        let o = parse_options(&json!({"tip_extra": 5, "overhang_angle": 45})).unwrap();
+        assert_eq!(o.tip, TipSpec::Angle(45.0));
+        let o = parse_options(&json!({"tip_extra": 5, "overhang_angle": 45, "tip_height": "r + 0.3 mm"})).unwrap();
+        assert_eq!(o.tip, TipSpec::Height("r + 0.3 mm".into()));
+    }
+
+    /// What the generated form sends: every field, with its defaults.
+    #[test]
+    fn options_from_form() {
+        let form = json!({"up": "auto", "up_angle": 90, "warn_horizontal": true, "tip_extra": 5, "tip_height": "", "flat_top": ""});
+        let o = parse_options(&form).unwrap();
+        assert_eq!(o.up, UpSpec::Auto);
+        assert_eq!(o.tip, TipSpec::Height("1.05 * r".into()));
+        assert!(o.flat.is_none() && o.circles.is_empty() && o.sketch.is_none() && o.warn_horizontal);
+        assert!(!parse_options(&json!({"warn_horizontal": false})).unwrap().warn_horizontal);
+        assert!(parse_options(&json!({"warn_horizontal": "no"})).is_err());
+        let o = parse_options(&json!({"up": "angle", "up_angle": 180})).unwrap();
+        assert_eq!(o.up, UpSpec::Explicit(geometry::parse_up("180").unwrap()));
+        // up_angle only counts with up = angle.
+        let o = parse_options(&json!({"up": "-y", "up_angle": 180})).unwrap();
+        assert_eq!(o.up, UpSpec::Explicit(Vec2::new(0.0, -1.0)));
+        assert!(parse_options(&json!({"up": "angle", "up_angle": "x"})).is_err());
+        assert!(!parse_options(&json!({"scope": "selected"})).unwrap().all_in_sketch);
+        assert!(parse_options(&json!({"scope": "all in sketch"})).unwrap().all_in_sketch);
+        assert!(parse_options(&json!({"scope": "some"})).is_err());
+    }
+
+    #[test]
+    fn explains_empty_selection() {
+        assert!(no_circle_selected(&[]).contains("nothing is selected"));
+        let m = no_circle_selected(&[json!({"kind": "face"}), json!({"kind": "sketch_curve", "entity": "line"})]);
+        assert!(m.contains("holds 2: face, sketch_curve (line)"), "{m}");
     }
 }

@@ -1,9 +1,9 @@
 //! Pure 2D geometry of a teardrop hole, in sketch coordinates. No host calls.
 //!
 //! A teardrop is a circle (centre `c`, radius `r`) whose top is replaced by two
-//! tangent lines meeting in a tip on the "up" axis. With an overhang angle `alpha`
-//! (measured from the horizontal, 45° by default) the tip lies at
-//! `d = r / cos(alpha)` from the centre: `r * sqrt(2)` for 45°.
+//! tangent lines meeting in a tip on the "up" axis, at `d` from the centre. The plugin's
+//! default is a low tip, `d = r * (1 + p/100)` with a few percent `p`; with an overhang
+//! angle `alpha` (from the horizontal) instead, `d = r / cos(alpha)`: `r * sqrt(2)` for 45°.
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Vec2 {
@@ -45,18 +45,17 @@ impl Vec2 {
 }
 
 /// Minimum tilt between the sketch plane and the horizontal (in sin) for `up: auto`.
-/// Below that the hole axis is (nearly) vertical and a teardrop makes no sense.
+/// Below that world +Z gives no usable direction in the sketch.
 pub const MIN_AUTO_UP: f64 = 0.17; // ~10°
 
-/// World +Z (the print direction) projected into a sketch plane, as a sketch-space unit vector.
-pub fn auto_up(x_dir: [f64; 3], y_dir: [f64; 3]) -> Result<Vec2, String> {
+/// World +Z projected into a sketch plane, as a sketch-space unit vector; `None` when the
+/// plane is (nearly) horizontal and the projection gives no direction.
+pub fn auto_up(x_dir: [f64; 3], y_dir: [f64; 3]) -> Option<Vec2> {
     let v = Vec2::new(x_dir[2], y_dir[2]);
     if v.len() < MIN_AUTO_UP {
-        return Err("the sketch plane is (nearly) horizontal, so the hole is vertical and needs no \
-                    teardrop; set `up` explicitly (+x, -x, +y, -y or an angle in degrees) to force one"
-            .into());
+        return None;
     }
-    Ok(v.normalized().unwrap())
+    v.normalized()
 }
 
 /// Parse an explicit `up` value: `+x`, `-x`, `+y`, `-y`, or an angle in degrees from sketch X.
@@ -210,8 +209,8 @@ mod tests {
     }
 
     #[test]
-    fn horizontal_plane_refused() {
-        assert!(auto_up([1.0, 0.0, 0.0], [0.0, 1.0, 0.0]).is_err());
+    fn horizontal_plane_gives_no_direction() {
+        assert!(auto_up([1.0, 0.0, 0.0], [0.0, 1.0, 0.0]).is_none());
     }
 
     #[test]

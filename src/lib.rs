@@ -49,6 +49,9 @@ mod component {
         fn log(&mut self, message: &str) {
             craft::plugin::log::log(craft::plugin::log::Level::Info, message);
         }
+        fn warn(&mut self, message: &str) {
+            craft::plugin::log::log(craft::plugin::log::Level::Warn, message);
+        }
     }
 
     struct Plugin;

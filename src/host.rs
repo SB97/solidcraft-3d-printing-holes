@@ -26,4 +26,5 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub trait Host {
     fn run(&mut self, command: &str, args: &Value) -> Result<Value>;
     fn log(&mut self, _message: &str) {}
+    fn warn(&mut self, _message: &str) {}
 }

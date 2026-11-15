@@ -1,9 +1,11 @@
 {
   "id": "printing-holes",
   "name": "3D Printing Holes",
-  "version": "0.1.0",
-  "description": "Holes made for 3D printing. Teardrop: turns selected sketch circles into teardrops (45 deg overhang, tip follows the radius) so holes in walls print without sagging.",
-  "capabilities": ["commands@0.1"],
+  "version": "0.2.2",
+  "description": "Holes made for 3D printing. Teardrop: select sketch circles, then run it; each gets a small tip a few percent of the radius above it (it follows the radius), so the top of a horizontal hole does not sag.",
+  "capabilities": [
+    "commands@0.1"
+  ],
   "runtime": {
     "module": "plugin.wasm",
     "entries": [
@@ -11,62 +13,71 @@
         "name": "teardrop",
         "effect": "edit",
         "slots": [
-          { "kind": "ribbon", "name": "Sketch" },
-          { "kind": "menu", "name": "Sketch" }
+          {
+            "kind": "menu",
+            "name": "Teardrop"
+          },
+          {
+            "kind": "ribbon",
+            "name": "Teardrop"
+          }
         ],
         "input_schema": {
           "type": "object",
-          "additionalProperties": false,
           "properties": {
-            "circles": {
-              "type": "array",
+            "scope": {
+              "type": "string",
               "title": "Circles",
-              "description": "Sketch circles to convert: ids such as \"c1\" or {id, sketch}. Empty: the circles currently selected.",
-              "items": {
-                "anyOf": [
-                  { "type": "string" },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "id": { "type": "string" },
-                      "sketch": { "type": ["integer", "string"] }
-                    },
-                    "required": ["id"]
-                  }
-                ]
-              },
-              "default": []
-            },
-            "sketch": {
-              "type": ["integer", "string", "null"],
-              "title": "Sketch",
-              "description": "Sketch id or name when the circles are given by id and no sketch is open.",
-              "default": null
+              "description": "selected = the sketch circles currently selected; all in sketch = every (non-construction) circle of the open sketch.",
+              "enum": [
+                "selected",
+                "all in sketch"
+              ],
+              "default": "selected"
             },
             "up": {
-              "type": ["string", "number"],
-              "title": "Up",
-              "description": "Which way is up (where the tip points): auto = world +Z (the print direction) projected into the sketch, or +x, -x, +y, -y, or an angle in degrees from sketch X.",
+              "type": "string",
+              "title": "Up (tip direction)",
+              "description": "Where the tip points. auto = world +Z (the print direction) projected into the sketch; +x, -x, +y, -y = sketch axes; angle = the angle below.",
+              "enum": [
+                "auto",
+                "+x",
+                "-x",
+                "+y",
+                "-y",
+                "angle"
+              ],
               "default": "auto"
             },
-            "overhang_angle": {
+            "up_angle": {
               "type": "number",
-              "title": "Overhang angle (deg)",
-              "description": "Steepest overhang from the horizontal; the tip lies at r / cos(angle) from the centre (45 deg: r * sqrt(2)).",
+              "title": "Up angle (deg)",
+              "description": "Only with Up = angle: direction of the tip in degrees from sketch X (90 = sketch +Y).",
+              "default": 90
+            },
+            "warn_horizontal": {
+              "type": "boolean",
+              "title": "Warn on horizontal sketch",
+              "description": "With Up = auto on a horizontal sketch, world +Z gives no direction and the tip points to sketch +Y. Warn about it (turn off when the part prints in another orientation anyway).",
+              "default": true
+            },
+            "tip_extra": {
+              "type": "number",
+              "title": "Tip above circle (% of r)",
+              "description": "How far the tip rises above the circle, in percent of the radius: tip at r * (1 + p/100) from the centre. A few percent bridge the sagging top of a printed hole.",
               "exclusiveMinimum": 0,
-              "exclusiveMaximum": 90,
-              "default": 45
+              "default": 5
             },
             "tip_height": {
-              "type": ["string", "number", "null"],
+              "type": "string",
               "title": "Tip height",
-              "description": "Override: distance from the centre to the tip, a number in mm or an expression where r is the radius (e.g. \"1.3*r\"). Empty: from the overhang angle.",
+              "description": "Optional override: distance from the centre to the tip, in mm or an expression where r is the radius (e.g. r + 0.3 mm, or r*sqrt(2) for a classic 45 deg teardrop). Empty: from Tip above circle.",
               "default": ""
             },
             "flat_top": {
-              "type": ["string", "number", "null"],
+              "type": "string",
               "title": "Flat top at",
-              "description": "Optional: cut the tip flat at this distance from the centre, a number in mm or an expression in r (e.g. \"r\" or \"1.1*r\"). Empty: pointed tip.",
+              "description": "Optional: cut the tip flat at this distance from the centre, in mm or an expression in r (e.g. r or 1.1*r). Empty: pointed tip.",
               "default": ""
             }
           }

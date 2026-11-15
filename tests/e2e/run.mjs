@@ -69,24 +69,37 @@ const plugin = (params) => ({
   params: { path: PKG, approval, entry: "teardrop", params },
 });
 
-const tail = (r2) => [
+const tail = (r2, extrude = {}) => [
   { command: "sketch.inspect", params: {} },
   { command: "sketch.finish", params: {} },
-  { command: "solid.extrude", params: { distance: DEPTH, operation: "cut", profiles: "all" } },
+  { command: "solid.extrude", params: { distance: DEPTH, operation: "cut", profiles: "all", ...extrude } },
   { command: "inspect.measure", params: {} },
   { command: "parameters.change", params: { name: "hole_r", expression: `${r2} mm` } },
   { command: "inspect.measure", params: {} },
 ];
 
+/** Every form field at its manifest default, as the generated dialog submits them. */
+const FORM = { scope: "selected", up: "auto", up_angle: 90, warn_horizontal: true, tip_extra: 5, tip_height: "", flat_top: "" };
+
+/** A pointed tip at k * r: the flanks touch the circle at acos(1/k) from up. */
+const low = (k) => (r) => area(r, { phiDeg: (Math.acos(1 / k) * 180) / PI, d: k * r });
+const S30 = Math.sin(PI / 6), C30 = Math.cos(PI / 6);
+
 const scenarios = [
   {
-    name: "45° from selection, up = auto (world +Z)",
+    name: "default: tip 5 % of r above the circle, from selection, up = auto (world +Z)",
     steps: [...base(), plugin({}), ...tail(6)],
-    area: (r) => area(r),
-    tipZ: (r) => CZ + r * Math.SQRT2,
+    area: low(1.05),
+    tipZ: (r) => CZ + 1.05 * r,
   },
   {
-    name: "explicit circle ids, overhang 50°",
+    name: "tip_extra 12 %",
+    steps: [...base(), plugin({ tip_extra: 12 }), ...tail(6)],
+    area: low(1.12),
+    tipZ: (r) => CZ + 1.12 * r,
+  },
+  {
+    name: "explicit circle ids, overhang 50° (scripts)",
     steps: [...base({ select: false }), plugin({ circles: ["c1"], overhang_angle: 50 }), ...tail(6)],
     area: (r) => area(r, { phiDeg: 50 }),
     tipZ: (r) => CZ + r / Math.cos((50 * PI) / 180),
@@ -94,19 +107,19 @@ const scenarios = [
   {
     name: "tip_height override 1.2*r",
     steps: [...base(), plugin({ tip_height: "1.2*r" }), ...tail(6)],
-    area: (r) => area(r, { phiDeg: (Math.acos(1 / 1.2) * 180) / PI, d: 1.2 * r }),
+    area: low(1.2),
     tipZ: (r) => CZ + 1.2 * r,
   },
   {
     name: "oblique up: 300° in sketch = 30° off world +Z towards +X",
     steps: [...base(), plugin({ up: "300" }), ...tail(6)],
-    area: (r) => area(r),
-    tipZ: (r) => CZ + r * Math.SQRT2 * Math.cos(PI / 6),
-    tipX: (r) => r * Math.SQRT2 * Math.sin(PI / 6),
+    area: low(1.05),
+    tipZ: (r) => CZ + 1.05 * r * C30,
+    tipX: (r) => 1.05 * r * S30,
   },
   {
-    name: "flat top at r",
-    steps: [...base(), plugin({ flat_top: "r" }), ...tail(6)],
+    name: "classic 45° (overhang_angle) with flat top at r",
+    steps: [...base(), plugin({ overhang_angle: 45, flat_top: "r" }), ...tail(6)],
     area: (r) => area(r, { c: r }),
     tipZ: (r) => CZ + r,
   },
@@ -115,6 +128,44 @@ const scenarios = [
     steps: [...base(), plugin({ flat_top: "1.1*r", tip_height: "1.5*r" }), ...tail(6)],
     area: (r) => area(r, { phiDeg: (Math.acos(1 / 1.5) * 180) / PI, d: 1.5 * r, c: 1.1 * r }),
     tipZ: (r) => CZ + 1.1 * r,
+  },
+  {
+    name: "form defaults (what the GUI dialog sends)",
+    steps: [...base(), plugin(FORM), ...tail(6)],
+    area: low(1.05),
+    tipZ: (r) => CZ + 1.05 * r,
+  },
+  {
+    name: "form: Circles = all in sketch, nothing selected",
+    steps: [...base({ select: false }), plugin({ ...FORM, scope: "all in sketch" }), ...tail(6)],
+    area: low(1.05),
+    tipZ: (r) => CZ + 1.05 * r,
+  },
+  {
+    // The GUI selects a circle of another sketch than the one being edited as an
+    // external_sketch_curve: the plugin switches to the circle's sketch and back again.
+    name: "circle in another sketch than the open one (external_sketch_curve)",
+    steps: [
+      ...base({ select: false }),
+      { command: "sketch.finish", params: {} },
+      { command: "sketch.create", params: { plane: "XZ" } },
+      { command: "select.set", params: { items: [{ type: "external_sketch_curve", sketch: 2, id: "c1" }] } },
+      plugin(FORM),
+      { command: "document.inspect", params: { timeline: false, bodies: false, measure: false } },
+      { command: "sketch.finish", params: {} },
+      { command: "sketch.edit", params: { sketch: 2 } },
+      ...tail(6, { sketch: 2 }),
+    ],
+    activeAfter: 3,
+    area: low(1.05),
+    tipZ: (r) => CZ + 1.05 * r,
+  },
+  {
+    name: "form: up = angle, up_angle 300",
+    steps: [...base(), plugin({ ...FORM, up: "angle", up_angle: 300 }), ...tail(6)],
+    area: low(1.05),
+    tipZ: (r) => CZ + 1.05 * r * C30,
+    tipX: (r) => 1.05 * r * S30,
   },
 ];
 
@@ -137,6 +188,12 @@ for (const s of scenarios) {
   const n = s.steps.length;
   const pluginResult = res[s.steps.findIndex((x) => x.command === "plugin.run")];
   const conv = pluginResult.result.converted[0];
+  if (s.activeAfter !== undefined) {
+    const doc = res[s.steps.findIndex((x) => x.command === "plugin.run") + 1];
+    const ok = doc.active_sketch === s.activeAfter;
+    if (!ok) failed++;
+    console.log(`  ${ok ? "ok  " : "FAIL"} sketch being edited afterwards: ${doc.active_sketch} (expected ${s.activeAfter})`);
+  }
   if (conv.warnings.length) console.log("  warnings:", conv.warnings);
   const sk = res[n - 6];
   if (sk.dof !== 0) failed++;
@@ -148,19 +205,43 @@ for (const s of scenarios) {
   check("volume r=6 (parametric)", res[n - 1].total.volume_mm3, BLOCK - s.area(6) * DEPTH);
 }
 
-// Refusals: a horizontal sketch with up=auto, and a tip below the circle.
+// A horizontal sketch with up = auto: no refusal, the tip goes to sketch +Y (here world +Y),
+// with a warning unless warn_horizontal is off.
+console.log("\n# horizontal sketch");
+for (const [name, extra, wantWarning] of [
+  ["XY sketch, up = auto: warns", {}, true],
+  ["XY sketch, up = auto, warn_horizontal off: silent", { warn_horizontal: false }, false],
+]) {
+  const steps = [
+    { command: "sketch.create", params: { plane: "XY" } },
+    { command: "sketch.circle.center", params: { center: [0, 0], radius: 3 } },
+    { command: "sketch.dimension", params: { entities: ["c1"], type: "radius", value: 3 } },
+    plugin({ circles: ["c1"], ...extra }), // the centre snaps to the origin
+    { command: "sketch.inspect", params: {} },
+  ];
+  const r = run(steps);
+  if (r.error) {
+    failed++;
+    console.log(`  FAIL ${name}: ${r.error.split("\n")[0].slice(0, 300)}`);
+    continue;
+  }
+  const conv = r.results[3].result.converted[0];
+  const warned = conv.warnings.some((w) => w.includes("horizontal"));
+  if (warned !== wantWarning) failed++;
+  console.log(`  ${warned === wantWarning ? "ok  " : "FAIL"} ${name}: warnings ${JSON.stringify(conv.warnings)}`);
+  const sk = r.results[4];
+  if (sk.dof !== 0) failed++;
+  console.log(`  ${sk.dof === 0 ? "ok  " : "FAIL"} dof ${sk.dof}`);
+  const upEnd = sk.points.find((p) => p.id === `${conv.up_line}.end`);
+  check("up-line end world Y", upEnd.world[1], 1.05 * 3);
+}
+
+// Refusals: a tip below the circle.
 console.log("\n# refusals");
 for (const [name, steps, needle] of [
-  [
-    "XY sketch with up=auto",
-    [
-      { command: "sketch.create", params: { plane: "XY" } },
-      { command: "sketch.circle.center", params: { center: [0, 0], radius: 3 } },
-      plugin({ circles: ["c1"] }),
-    ],
-    "horizontal",
-  ],
   ["tip_height below the radius", [...base(), plugin({ tip_height: "0.9*r" })], "tip must lie above"],
+  ["tip_extra 0", [...base(), plugin({ tip_extra: 0 })], "tip_extra"],
+  ["form, nothing selected", [...base({ select: false }), plugin(FORM)], "nothing is selected"],
 ]) {
   const r = run(steps);
   const ok = !!r.error && r.error.includes(needle);
