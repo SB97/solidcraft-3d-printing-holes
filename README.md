@@ -111,6 +111,11 @@ Pushing a tag `v*` (e.g. `v0.1.0`) builds the zip on GitHub Actions and attaches
 | [wit/plugin.wit](wit/plugin.wit) | pinned copy of the SolidCraft plugin WIT |
 | [plugin/plugin.json](plugin/plugin.json) | manifest: entry, input schema, allowed commands |
 
+## Inspiration
+
+- Makers Muse: [video on YouTube](https://www.youtube.com/watch?v=j6508J94VsA)
+- Slant 3D: [video on YouTube](https://www.youtube.com/watch?v=Bd7Yyn61XWQ)
+
 ## License
 
 MIT, see [LICENSE](LICENSE).
