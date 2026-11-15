@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A SolidCraft CAD plugin (`solidcraft-3d-printing-holes`), written in Rust and compiled to a WebAssembly component. Its one entry so far, `teardrop`, turns selected sketch circles into constrained teardrop profiles (by default a low tip 5 % of the radius above the circle, `tip_extra`; a classic 45° overhang via `overhang_angle` or `tip_height`) so that horizontal holes print without supports. The README is in German and is the user-facing doc: it covers fields, formulas and install steps.
+A SolidCraft CAD plugin (`solidcraft-3d-printing-holes`), written in Rust and compiled to a WebAssembly component. Its one entry so far, `teardrop`, turns selected sketch circles into constrained teardrop profiles (by default a low tip 5 % of the radius above the circle, `tip_extra`; a classic 45° overhang via `overhang_angle` or `tip_height`) so that horizontal holes print without supports. The README (English) is the user-facing doc: it covers fields, formulas and install steps. Its first picture (`docs/teardrop.png`, not SVG) is the card image on the plugin list at tharje.github.io/solidcraft-plugins.
 
 ## Commands
 
@@ -28,6 +28,10 @@ The e2e test uses `C:/Program Files/SolidCraft/solidcraft-cli.exe` by default; s
 - **`plugin/plugin.json`** is the manifest: entries, the input JSON schema, and a **`commands` allowlist**. Any new app command called through `host.run` must be added to that list, or it fails at runtime. The input schema and `parse_options` must stay in sync. **SolidCraft generates the GUI form from `input_schema`**, so keep form fields to plain `number`/`boolean`/`string`/`enum` (no union types or `anyOf`). Script-only inputs (`circles`, `sketch`) are deliberately left out of the schema; the schema has no `additionalProperties: false`, so the CLI can still pass them. `slots[].name` is the **label** of the menu item/ribbon button (it appears as *Plugins › 3D Printing Holes › Teardrop…* and *Model › Plugins › Teardrop*); it is not the name of a target menu. Headless: `plugin.inspect` (to get the approval hash) followed by `plugin.run`.
 - **`wit/plugin.wit`** is a pinned copy of SolidCraft's `craft:plugin@0.1.0` WIT. The host links no WASI, so the component must import only `craft:plugin` interfaces. Don't add dependencies that pull in WASI or std I/O. `build.ps1` prints the component's imports so you can check this.
 - **Build script quirks** (keep them): it uses `$ErrorActionPreference = 'Continue'` with `$LASTEXITCODE` checks, because PowerShell 5.1 turns cargo's stderr into errors. It builds the zip with `tar.exe` and not `Compress-Archive`, because `plugin.install` rejects backslash entry names.
+
+## Releasing
+
+The plugin list (tharje.github.io/solidcraft-plugins) finds the repo through its GitHub topic `solidcraft-plugin` and reads `plugin/plugin.json` from the default branch; its download button is the zip of the latest release. Bump `version` in `Cargo.toml` and `plugin/plugin.json` together, then push a tag `v<version>`: `.github/workflows/release.yml` checks that the tag matches, runs the tests and `build.ps1`, and attaches the zip to the release.
 
 ## Adding an entry
 

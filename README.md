@@ -1,103 +1,114 @@
-# 3D Printing Holes – SolidCraft-Plugin
+# 3D Printing Holes – SolidCraft plugin
 
-Löcher, die sich gut 3D-drucken lassen. Erste Funktion: **Teardrop**.
+Holes that print well. First feature: **Teardrop**.
 
-Ein waagrechtes Loch in einer senkrechten Wand hat oben eine flache Decke, die beim Druck durchhängt.
-Der Teardrop ersetzt diese Decke durch zwei tangentiale Flanken, die sich in einer kleinen Spitze treffen.
-Standardmäßig liegt die Spitze nur **5 % des Radius** über dem Kreis. Das reicht, um das Durchhängen
-auszugleichen, und das Loch bleibt praktisch rund. Der klassische 45°-Teardrop ist weiterhin möglich.
+![Default teardrop with a tip 5 % of the radius above the circle (left) and a classic 45° teardrop (right); the arrow is the print direction](docs/teardrop.png)
 
+A horizontal hole in a vertical wall has a flat ceiling that sags when it is printed.
+The teardrop replaces that ceiling with two tangent flanks that meet in a small tip.
+By default the tip sits only **5 % of the radius** above the circle. That is enough to make up for
+the sag, and the hole stays practically round. The classic 45° teardrop is still available.
 
-## Bedienung
+## Usage
 
-1. Im Sketch einen normalen Kreis zeichnen und bemaßen, z. B. Radius `hole_r`.
-2. Mit **Esc** das aktive Sketch-Werkzeug beenden und den Kreis auswählen (mit Shift auch mehrere).
-3. **Plugins › 3D Printing Holes › Teardrop…** öffnen (oder im Ribbon **Model › Plugins › Teardrop**).
-4. Im Formular die Felder prüfen, **Run** drücken und beim ersten Mal das Paket freigeben.
+1. In a sketch, draw a normal circle and dimension it, e.g. radius `hole_r`.
+2. Press **Esc** to end the active sketch tool and select the circle (hold Shift for several).
+3. Open **Plugins › 3D Printing Holes › Teardrop…** (or **Model › Plugins › Teardrop** in the ribbon).
+4. Check the fields in the form, press **Run** and approve the package the first time.
 
-Der Sketch des Kreises muss dafür nicht aktiv sein. Gehört der ausgewählte Kreis zu einem anderen Sketch
-als dem gerade bearbeiteten (SolidCraft meldet ihn dann als `external_sketch_curve`), schließt das Plugin den aktiven Sketch,
-wandelt den Kreis in seinem eigenen Sketch um und öffnet danach wieder den Sketch, in dem man vorher war.
+The circle's sketch does not need to be open. If the selected circle belongs to a different sketch
+than the one being edited (SolidCraft reports it as `external_sketch_curve`), the plugin closes the active
+sketch, converts the circle in its own sketch and then reopens the sketch you were in.
 
-Findet das Plugin keinen ausgewählten Kreis, nennt die Fehlermeldung, was stattdessen ausgewählt war.
-Alternativ wandelt **Circles = `all in sketch`** alle Kreise des offenen Sketches um.
+If the plugin finds no selected circle, the error message says what was selected instead.
+Alternatively, **Circles = `all in sketch`** converts every circle of the open sketch.
 
-Das Formular erzeugt SolidCraft selbst aus dem Eingabeschema im Manifest.
-Der ganze Lauf ist ein Undo-Schritt.
+SolidCraft builds the form itself from the input schema in the manifest.
+The whole run is a single undo step.
 
-Der Kreis wird zu einem Bogen um den alten Mittelpunkt und zwei tangentialen Flanken bis zur Spitze.
-Das Ergebnis ist ganz normale Sketch-Geometrie mit Constraints:
+The circle becomes an arc around the old centre plus two tangent flanks up to the tip.
+The result is ordinary, constrained sketch geometry:
 
-- **Konstruktionslinie Mitte → Spitze:** zeigt im Sketch dauerhaft, wo „oben“ ist.
-- **Radius:** Die Radius- bzw. Durchmesserbemaßung des Kreises geht samt Ausdruck auf den Bogen über. Wer den Parameter ändert, ändert den ganzen Teardrop mit.
-- **Spitze:** Eine Längenbemaßung mit Ausdruck hält sie, z. B. `1.05 * (hole_r)`. Ändert sich der Radius, wandert sie automatisch mit, ohne dass das Plugin erneut laufen muss.
+- **Construction line centre → tip:** shows permanently in the sketch where "up" is.
+- **Radius:** the circle's radius or diameter dimension moves to the arc together with its expression. Change the parameter and the whole teardrop follows.
+- **Tip:** held by a length dimension with an expression, e.g. `1.05 * (hole_r)`. When the radius changes the tip moves with it, without running the plugin again.
 
-### Felder im Formular
+### Form fields
 
-| Feld | Standard | Bedeutung |
+| Field | Default | Meaning |
 |---|---|---|
-| **Circles** (`scope`) | `selected` | `selected` = die ausgewählten Sketch-Kreise; `all in sketch` = alle (Nicht-Konstruktions-)Kreise des offenen Sketches |
-| **Up** (`up`) | `auto` | Richtung der Spitze: `auto` = Welt-+Z (Druckrichtung) in die Sketch-Ebene projiziert; `+x`, `-x`, `+y`, `-y` = Sketch-Achsen; `angle` = Winkel aus dem nächsten Feld |
-| **Up angle** (`up_angle`) | `90` | nur bei Up = `angle`: Winkel in Grad zur Sketch-X-Achse (90 = Sketch-+Y) |
-| **Warn on horizontal sketch** (`warn_horizontal`) | an | Warnung, wenn Up = `auto` auf einem waagrechten Sketch keine Richtung findet (siehe unten) |
-| **Tip above circle (% of r)** (`tip_extra`) | `5` | wie weit die Spitze über dem Kreis liegt, in Prozent des Radius |
-| **Tip height** (`tip_height`) | leer | Override: Abstand Mitte → Spitze, in mm oder als Ausdruck mit `r` = Radius, z. B. `r + 0.3 mm` oder `r*sqrt(2)` (klassisch 45°) |
-| **Flat top at** (`flat_top`) | leer | Spitze flach abschneiden im Abstand vom Mittelpunkt, z. B. `r` |
+| **Circles** (`scope`) | `selected` | `selected` = the selected sketch circles; `all in sketch` = all (non-construction) circles of the open sketch |
+| **Up** (`up`) | `auto` | Direction of the tip: `auto` = world +Z (print direction) projected into the sketch plane; `+x`, `-x`, `+y`, `-y` = sketch axes; `angle` = angle from the next field |
+| **Up angle** (`up_angle`) | `90` | Only with Up = `angle`: angle in degrees from the sketch X axis (90 = sketch +Y) |
+| **Warn on horizontal sketch** (`warn_horizontal`) | on | Warn when Up = `auto` finds no direction on a horizontal sketch (see below) |
+| **Tip above circle (% of r)** (`tip_extra`) | `5` | How far the tip rises above the circle, in percent of the radius |
+| **Tip height** (`tip_height`) | empty | Override: distance centre → tip, in mm or as an expression with `r` = radius, e.g. `r + 0.3 mm` or `r*sqrt(2)` (classic 45°) |
+| **Flat top at** (`flat_top`) | empty | Cut the tip flat at this distance from the centre, e.g. `r` |
 
-Nur per Skript/CLI (nicht im Formular): `circles` (Kreis-IDs `"c1"` oder `{id, sketch}`, leer = Auswahl) und `sketch` (Sketch-ID/-Name, wenn kein Sketch offen ist).
-`up` nimmt dort auch direkt einen Winkel, z. B. `"300"`. `overhang_angle` (Grad zur Horizontalen) baut den Teardrop über einen Winkel-Constraint statt über die Höhe und hat Vorrang vor `tip_extra`.
+Script/CLI only (not in the form): `circles` (circle ids `"c1"` or `{id, sketch}`, empty = selection) and `sketch` (sketch id/name when no sketch is open).
+There, `up` also takes an angle directly, e.g. `"300"`. `overhang_angle` (degrees from the horizontal) builds the teardrop with an angle constraint instead of the height and takes precedence over `tip_extra`.
 
-### Formel
+### Formulas
 
-- Standard: **h = r·(1 + p/100)** mit p = `tip_extra`, also **h = 1,05·r** bei 5 %.
-- Die Flanken berühren den Kreis im Winkel φ = acos(r/h) von „oben“ aus (bei 5 %: φ ≈ 17,8°) und stehen φ zur Horizontalen.
-  Die Spitze überbrückt also nur eine kurze Sehne von 2·r·sin φ (≈ 0,61·r) statt der ganzen Lochbreite.
-- Fläche: r²·(π − φ) + r·h·sin φ; bei 5 % sind das nur ≈ 0,3 % mehr als der Kreis.
-- Klassisch mit Überhangwinkel α: h = r / cos(α), bei 45° also h = r·√2 ≈ 1,414·r.
+- Default: **h = r·(1 + p/100)** with p = `tip_extra`, i.e. **h = 1.05·r** at 5 %.
+- The flanks touch the circle at the angle φ = acos(r/h) from "up" (at 5 %: φ ≈ 17.8°) and are inclined φ to the horizontal.
+  So the tip only bridges a short chord of 2·r·sin φ (≈ 0.61·r) instead of the whole hole width.
+- Area: r²·(π − φ) + r·h·sin φ; at 5 % that is only ≈ 0.3 % more than the circle.
+- Classic with overhang angle α: h = r / cos(α), so h = r·√2 ≈ 1.414·r at 45°.
 
-Das Durchhängen ist eher eine feste Strecke (ein, zwei Schichthöhen) als ein Anteil des Radius.
-Für sehr große oder sehr kleine Löcher passt deshalb ein Ausdruck wie `tip_height = r + 0.3 mm` oft besser.
+The sag is more of a fixed distance (one or two layer heights) than a fraction of the radius.
+For very large or very small holes an expression like `tip_height = r + 0.3 mm` is often a better fit.
 
-**Waagrechte Sketches:** Die CAD-Lage ist nicht immer die Drucklage.
-Liegt der Sketch waagrecht, liefert Up = `auto` keine Richtung, deshalb zeigt die Spitze dann nach Sketch-+Y.
-Das Plugin warnt dabei; mit **Warn on horizontal sketch** = aus bleibt es still.
-Wird das Teil anders gedruckt, als es modelliert ist, setzt man Up direkt.
-Constraints, die am Kreis hingen (z. B. tangential zu etwas), gehen verloren. Das Plugin meldet sie als Warnung.
-Am besten wandelt man den Kreis um, bevor man extrudiert.
+**Horizontal sketches:** the CAD orientation is not always the print orientation.
+On a horizontal sketch, Up = `auto` gives no direction, so the tip points to sketch +Y.
+The plugin warns about it; with **Warn on horizontal sketch** = off it stays quiet.
+If the part is printed in a different orientation than it is modelled, set Up directly.
 
-## Installieren
+Constraints that were attached to the circle (e.g. tangent to something) are lost; the plugin reports them as a warning.
+It is best to convert the circle before extruding.
 
-- **GUI:** *Plugins › Install plugin…* (oder *Preferences › Plugins*) und `dist/solidcraft-3d-printing-holes.zip` wählen. Eine bereits installierte Version wird dabei ersetzt.
-- **Manuell:** Den Ordner `dist/solidcraft-3d-printing-holes/` nach `%LOCALAPPDATA%\SolidCraft\plugins\solidcraft-3d-printing-holes\` kopieren und SolidCraft neu starten.
+## Install
 
-Ohne GUI (Skript, MCP, Agent-Chat) geht das Ausführen per `plugin.inspect` (liefert den Freigabe-Hash) und dann `plugin.run` (über MCP, Agent-Chat oder CLI):
+Download `solidcraft-3d-printing-holes.zip` from the [latest release](../../releases/latest), or build it yourself (see below).
+
+- **GUI:** *Plugins › Install plugin…* (or *Preferences › Plugins*) and choose the zip. An installed older version is replaced.
+- **Manual:** copy the folder `solidcraft-3d-printing-holes/` from the zip to `%LOCALAPPDATA%\SolidCraft\plugins\solidcraft-3d-printing-holes\` and restart SolidCraft.
+
+Without the GUI (script, MCP, agent chat, CLI) run it with `plugin.inspect` (returns the approval hash) followed by `plugin.run`:
 
 ```json
 [{"command":"plugin.inspect","params":{"path":"dist/solidcraft-3d-printing-holes"}}]
 [{"command":"plugin.run","params":{"path":"dist/solidcraft-3d-printing-holes","approval":"<hash>","entry":"teardrop","params":{}}}]
 ```
 
-Menü und Ribbon-Knopf gibt es ab SolidCraft 0.42.
+The menu entry and ribbon button need SolidCraft 0.42 or later.
 
-## Bauen
+## Build
 
-Voraussetzungen:
+Requirements (Windows):
 
-- rustup; die Toolchain `stable-x86_64-pc-windows-gnu` wird über `rust-toolchain.toml` automatisch gewählt und braucht keine Visual Studio Build Tools
-- [wasm-tools](https://github.com/bytecodealliance/wasm-tools) im `PATH`
+- rustup; `rust-toolchain.toml` selects the `stable-x86_64-pc-windows-gnu` toolchain automatically, so no Visual Studio Build Tools are needed
+- [wasm-tools](https://github.com/bytecodealliance/wasm-tools) on `PATH`
 
 ```powershell
-.\scripts\build.ps1          # -> dist/solidcraft-3d-printing-holes/ und dist/solidcraft-3d-printing-holes.zip
-cargo test                   # Geometrie- und Parser-Tests
-node tests/e2e/run.mjs       # End-to-End gegen solidcraft-cli (headless)
+.\scripts\build.ps1          # -> dist/solidcraft-3d-printing-holes/ and dist/solidcraft-3d-printing-holes.zip
+cargo test                   # geometry and parser tests
+node tests/e2e/run.mjs       # end-to-end against solidcraft-cli (headless)
 ```
 
-## Aufbau
+Pushing a tag `v*` (e.g. `v0.1.0`) builds the zip on GitHub Actions and attaches it to a release
+([.github/workflows/release.yml](.github/workflows/release.yml)). The tag must match the `version` in `plugin/plugin.json`.
 
-| Datei | Inhalt |
+## Layout
+
+| File | Content |
 |---|---|
-| [src/geometry.rs](src/geometry.rs) | reine Teardrop-Geometrie, Projektion von „oben“ |
-| [src/teardrop.rs](src/teardrop.rs) | Eingaben, Kreis lesen, Geometrie und Constraints über App-Befehle erzeugen |
-| [src/lib.rs](src/lib.rs) | Entry-Dispatch und WIT-Bindings (`craft:plugin@0.1.0`) |
-| [wit/plugin.wit](wit/plugin.wit) | festgehaltene Kopie der SolidCraft-Plugin-WIT |
-| [plugin/plugin.json](plugin/plugin.json) | Manifest: Entry, Eingabeschema, erlaubte Befehle |
+| [src/geometry.rs](src/geometry.rs) | pure teardrop geometry, projection of "up" |
+| [src/teardrop.rs](src/teardrop.rs) | inputs, reading the circle, creating geometry and constraints via app commands |
+| [src/lib.rs](src/lib.rs) | entry dispatch and WIT bindings (`craft:plugin@0.1.0`) |
+| [wit/plugin.wit](wit/plugin.wit) | pinned copy of the SolidCraft plugin WIT |
+| [plugin/plugin.json](plugin/plugin.json) | manifest: entry, input schema, allowed commands |
+
+## License
+
+MIT, see [LICENSE](LICENSE).

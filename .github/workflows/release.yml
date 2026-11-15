@@ -1,0 +1,40 @@
+# Builds the plugin zip and attaches it to a GitHub release when a tag v* is pushed.
+# The SolidCraft plugin list (tharje.github.io/solidcraft-plugins) links the zip of the latest release.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag matches manifest version
+        shell: pwsh
+        run: |
+          $v = (Get-Content plugin/plugin.json -Raw | ConvertFrom-Json).version
+          if ("v$v" -ne $env:GITHUB_REF_NAME) { throw "tag $env:GITHUB_REF_NAME != plugin.json version $v" }
+
+      - name: Install wasm-tools
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-tools
+
+      - name: Test
+        run: cargo test
+
+      - name: Build
+        shell: powershell
+        run: .\scripts\build.ps1
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/solidcraft-3d-printing-holes.zip
+          generate_release_notes: true
