@@ -1,0 +1,34 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What this is
+
+A SolidCraft CAD plugin (`printing-holes`), written in Rust and compiled to a WebAssembly component. Its one entry so far, `teardrop`, turns selected sketch circles into constrained teardrop profiles (a 45° overhang by default) so that horizontal holes print without supports. The README is in German and is the user-facing doc: it covers fields, formulas and install steps.
+
+## Commands
+
+Windows only. `rust-toolchain.toml` pins `stable-x86_64-pc-windows-gnu` plus the `wasm32-unknown-unknown` target, so no MSVC build tools are needed. `wasm-tools` must be on `PATH`.
+
+```powershell
+.\scripts\build.ps1                 # wasm build -> dist/printing-holes/{plugin.json,plugin.wasm} + dist/printing-holes.zip
+cargo test                          # native unit tests (geometry + param parsing)
+cargo test flat_top_at_r            # run a single test by name
+node tests/e2e/run.mjs              # e2e against headless solidcraft-cli; run build.ps1 first
+```
+
+The e2e test uses `C:/Program Files/SolidCraft/solidcraft-cli.exe` by default; set `SOLIDCRAFT_CLI` to point it at another CLI. It runs JSON command scripts through `solidcraft-cli run`. For each scenario it checks that the sketch ends at dof 0, where the up-line tip lands in world coordinates, and that the volume after a cut matches the analytic teardrop area. It then changes the `hole_r` parameter and checks the volume again, which shows that the shape follows the parameter without re-running the plugin.
+
+## Architecture
+
+- **The host abstraction is the key seam.** `host::Host` (`src/host.rs`) has a single method, `run(command, json) -> json`. In the wasm build it is implemented by `WasmHost` in `src/lib.rs`, which calls `craft:plugin/commands.run`. All of that code sits behind `#[cfg(target_arch = "wasm32")]`, and `wit-bindgen` is a wasm-only dependency. The crate is `cdylib` + `rlib`, so `cargo test` builds natively and never touches WIT.
+- **`src/geometry.rs`** holds pure 2D maths: tangent points, tip, flat cap, area, and `auto_up`, which projects world +Z into the sketch plane and refuses horizontal planes. It makes no host calls, so it is easy to unit test.
+- **`src/teardrop.rs`** handles input parsing and drives the app. For each circle it inspects the sketch, computes the geometry, and draws a construction up-line, a center-point arc and the flanks with `sketch.line`. It adds tangency, deletes the circle, and moves the circle's radius/diameter *expression* onto the arc. Finally it constrains the up direction and the tip (an angle dimension, or a length expression), then checks `sketch.solve`.
+- **Parametric intent matters.** User expressions such as `tip_height`/`flat_top` use `r`, which `substitute_r` replaces with the circle's own radius expression, so every dimension stays tied to the user's parameter. Keep new features expression-based in the same way rather than baking in evaluated numbers.
+- **`plugin/plugin.json`** is the manifest: entries, the input JSON schema, and a **`commands` allowlist**. Any new app command called through `host.run` must be added to that list, or it fails at runtime. The input schema and `parse_options` must stay in sync. The ribbon/menu slots are declared, but the current SolidCraft version may not render a button for them yet. In that case run the plugin with `plugin.inspect` (to get the approval hash) followed by `plugin.run`.
+- **`wit/plugin.wit`** is a pinned copy of SolidCraft's `craft:plugin@0.1.0` WIT. The host links no WASI, so the component must import only `craft:plugin` interfaces. Don't add dependencies that pull in WASI or std I/O. `build.ps1` prints the component's imports so you can check this.
+- **Build script quirks** (keep them): it uses `$ErrorActionPreference = 'Continue'` with `$LASTEXITCODE` checks, because PowerShell 5.1 turns cargo's stderr into errors. It builds the zip with `tar.exe` and not `Compress-Archive`, because `plugin.install` rejects backslash entry names.
+
+## Adding an entry
+
+Add a match arm in `lib.rs::execute`, add a module that implements `run(host, params)`, and add an entry to `plugin.json` with its schema. Extend the `commands` allowlist with any new app commands, and add an e2e scenario.
