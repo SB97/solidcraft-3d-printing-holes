@@ -1,6 +1,6 @@
 # Builds the plugin package:
-#   dist/printing-holes/plugin.json + plugin.wasm          (folder for plugin.inspect / plugin.run)
-#   dist/printing-holes.zip                                 (for plugin.install / Preferences > Plugins)
+#   dist/solidcraft-3d-printing-holes/plugin.json + plugin.wasm          (folder for plugin.inspect / plugin.run)
+#   dist/solidcraft-3d-printing-holes.zip                                 (for plugin.install / Preferences > Plugins)
 # Not 'Stop': Windows PowerShell 5.1 turns a native tool's stderr (cargo's progress) into errors.
 # Each native step checks $LASTEXITCODE instead.
 $ErrorActionPreference = 'Continue'
@@ -11,9 +11,9 @@ $env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
 cargo build --release --target wasm32-unknown-unknown
 if ($LASTEXITCODE -ne 0) { throw "cargo build failed" }
 
-$out = Join-Path $root 'dist\printing-holes'
+$out = Join-Path $root 'dist\solidcraft-3d-printing-holes'
 New-Item -ItemType Directory -Force $out | Out-Null
-$core = Join-Path $root 'target\wasm32-unknown-unknown\release\printing_holes.wasm'
+$core = Join-Path $root 'target\wasm32-unknown-unknown\release\solidcraft_3d_printing_holes.wasm'
 $component = Join-Path $out 'plugin.wasm'
 
 # Wrap the core module (with its embedded WIT metadata) as a component. No WASI adapter:
@@ -25,11 +25,11 @@ if ($LASTEXITCODE -ne 0) { throw "component does not validate" }
 
 Copy-Item (Join-Path $root 'plugin\plugin.json') $out -Force
 
-$zip = Join-Path $root 'dist\printing-holes.zip'
+$zip = Join-Path $root 'dist\solidcraft-3d-printing-holes.zip'
 if (Test-Path $zip) { Remove-Item $zip -Force }
 # Not Compress-Archive: Windows PowerShell 5.1 writes backslashes into entry names, which
 # plugin.install refuses. Windows' own bsdtar writes a standard zip with forward slashes.
-& "$env:SystemRoot\System32\tar.exe" -a -c -f $zip -C (Join-Path $root 'dist') 'printing-holes'
+& "$env:SystemRoot\System32\tar.exe" -a -c -f $zip -C (Join-Path $root 'dist') 'solidcraft-3d-printing-holes'
 if ($LASTEXITCODE -ne 0) { throw "zip failed" }
 
 "Imports of the component:"

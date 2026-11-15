@@ -4,14 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A SolidCraft CAD plugin (`printing-holes`), written in Rust and compiled to a WebAssembly component. Its one entry so far, `teardrop`, turns selected sketch circles into constrained teardrop profiles (by default a low tip 5 % of the radius above the circle, `tip_extra`; a classic 45° overhang via `overhang_angle` or `tip_height`) so that horizontal holes print without supports. The README is in German and is the user-facing doc: it covers fields, formulas and install steps.
+A SolidCraft CAD plugin (`solidcraft-3d-printing-holes`), written in Rust and compiled to a WebAssembly component. Its one entry so far, `teardrop`, turns selected sketch circles into constrained teardrop profiles (by default a low tip 5 % of the radius above the circle, `tip_extra`; a classic 45° overhang via `overhang_angle` or `tip_height`) so that horizontal holes print without supports. The README is in German and is the user-facing doc: it covers fields, formulas and install steps.
 
 ## Commands
 
 Windows only. `rust-toolchain.toml` pins `stable-x86_64-pc-windows-gnu` plus the `wasm32-unknown-unknown` target, so no MSVC build tools are needed. `wasm-tools` must be on `PATH`.
 
 ```powershell
-.\scripts\build.ps1                 # wasm build -> dist/printing-holes/{plugin.json,plugin.wasm} + dist/printing-holes.zip
+.\scripts\build.ps1                 # wasm build -> dist/solidcraft-3d-printing-holes/{plugin.json,plugin.wasm} + dist/solidcraft-3d-printing-holes.zip
 cargo test                          # native unit tests (geometry + param parsing)
 cargo test flat_top_at_r            # run a single test by name
 node tests/e2e/run.mjs              # e2e against headless solidcraft-cli; run build.ps1 first

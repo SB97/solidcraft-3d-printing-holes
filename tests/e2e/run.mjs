@@ -10,8 +10,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const CLI = process.env.SOLIDCRAFT_CLI ?? "C:/Program Files/SolidCraft/solidcraft-cli.exe";
-const PKG = "dist/printing-holes";
-const work = mkdtempSync(join(tmpdir(), "printing-holes-e2e-"));
+const PKG = "dist/solidcraft-3d-printing-holes";
+const work = mkdtempSync(join(tmpdir(), "solidcraft-3d-printing-holes-e2e-"));
 
 function run(steps, { allowErrors = false } = {}) {
   const script = join(work, "script.json");

@@ -1,4 +1,4 @@
-//! SolidCraft plugin `printing-holes`: holes designed for 3D printing.
+//! SolidCraft plugin `solidcraft-3d-printing-holes`: holes designed for 3D printing.
 //!
 //! Entries (see `plugin/plugin.json`):
 //! - `teardrop`: turn selected sketch circles into teardrop profiles so holes in vertical

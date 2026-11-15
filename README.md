@@ -67,14 +67,14 @@ Am besten wandelt man den Kreis um, bevor man extrudiert.
 
 ## Installieren
 
-- **GUI:** *Plugins › Install plugin…* (oder *Preferences › Plugins*) und `dist/printing-holes.zip` wählen. Eine bereits installierte Version wird dabei ersetzt.
-- **Manuell:** Den Ordner `dist/printing-holes/` nach `%LOCALAPPDATA%\SolidCraft\plugins\printing-holes\` kopieren und SolidCraft neu starten.
+- **GUI:** *Plugins › Install plugin…* (oder *Preferences › Plugins*) und `dist/solidcraft-3d-printing-holes.zip` wählen. Eine bereits installierte Version wird dabei ersetzt.
+- **Manuell:** Den Ordner `dist/solidcraft-3d-printing-holes/` nach `%LOCALAPPDATA%\SolidCraft\plugins\solidcraft-3d-printing-holes\` kopieren und SolidCraft neu starten.
 
 Ohne GUI (Skript, MCP, Agent-Chat) geht das Ausführen per `plugin.inspect` (liefert den Freigabe-Hash) und dann `plugin.run` (über MCP, Agent-Chat oder CLI):
 
 ```json
-[{"command":"plugin.inspect","params":{"path":"dist/printing-holes"}}]
-[{"command":"plugin.run","params":{"path":"dist/printing-holes","approval":"<hash>","entry":"teardrop","params":{}}}]
+[{"command":"plugin.inspect","params":{"path":"dist/solidcraft-3d-printing-holes"}}]
+[{"command":"plugin.run","params":{"path":"dist/solidcraft-3d-printing-holes","approval":"<hash>","entry":"teardrop","params":{}}}]
 ```
 
 Menü und Ribbon-Knopf gibt es ab SolidCraft 0.42.
@@ -87,7 +87,7 @@ Voraussetzungen:
 - [wasm-tools](https://github.com/bytecodealliance/wasm-tools) im `PATH`
 
 ```powershell
-.\scripts\build.ps1          # -> dist/printing-holes/ und dist/printing-holes.zip
+.\scripts\build.ps1          # -> dist/solidcraft-3d-printing-holes/ und dist/solidcraft-3d-printing-holes.zip
 cargo test                   # Geometrie- und Parser-Tests
 node tests/e2e/run.mjs       # End-to-End gegen solidcraft-cli (headless)
 ```
