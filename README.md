@@ -43,7 +43,7 @@ In the order the form shows them:
 |---|---|---|
 | **Apply to all circles in sketch** (`apply_to_all`) | off | Off = only the selected sketch circles; on = all (non-construction) circles of the open sketch |
 | **Tip above circle (% of Ø)** (`tip_extra_d`) | `2.5` | How far the tip rises above the circle, in percent of the diameter: the hole gets that much taller at the top |
-| **Tip height** (`tip_height`) | empty | Override: distance centre → tip, in mm or as an expression with `r` = radius and `d` = diameter, e.g. `d/2 + 0.3 mm` or `d*sqrt(2)/2` (classic 45°) |
+| **Override: tip from centre** (`tip_height`) | empty | Empty = use **Tip above circle**. Set = replaces it with the distance from the centre (not from the circle) to the tip, in mm or as an expression with `r` = radius and `d` = diameter, e.g. `d/2 + 0.3 mm` or `d*sqrt(2)/2` (classic 45°) |
 | **Tip direction** (`up`) | `world +Z (print up)` | Direction of the tip: `world +Z (print up)` = world +Z projected into the sketch plane (the usual print direction); `sketch +X`, `sketch -X`, `sketch +Y`, `sketch -Y` = the sketch's own axes; `angle in sketch` = the angle from **Tip angle in sketch** |
 | **Tip angle in sketch (deg)** (`up_angle`) | `90` | Only with Tip direction = `angle in sketch`: angle in degrees from sketch +X, counter-clockwise (90 = sketch +Y) |
 | **Warn on horizontal sketch** (`warn_horizontal`) | on | Warn when Tip direction = `world +Z` finds no direction on a horizontal sketch (see below) |

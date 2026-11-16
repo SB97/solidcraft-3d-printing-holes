@@ -120,7 +120,7 @@ pub fn teardrop(center: Vec2, r: f64, up: Vec2, tip: Tip) -> Result<Teardrop, St
         Tip::Height(h) => {
             if !(h.is_finite() && h > r * (1.0 + 1e-6)) {
                 return Err(format!(
-                    "the tip must lie above the circle: tip_height {h:.4} mm must exceed the radius {r:.4} mm"
+                    "the tip must lie above the circle: the override is measured from the centre, so {h:.4} mm must exceed the radius {r:.4} mm (e.g. d/2 + 0.3 mm)"
                 ));
             }
             (h, (r / h).acos())
