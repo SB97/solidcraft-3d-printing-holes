@@ -18,8 +18,11 @@ enum UpSpec {
 #[derive(Debug, Clone, PartialEq)]
 enum TipSpec {
     Angle(f64),
-    /// Distance centre → tip, an expression in which `r` is the radius.
+    /// Distance centre → tip, an expression in which `r` is the radius and `d` the diameter.
     Height(String),
+    /// Tip this many percent of the diameter above the circle. Written into the sketch as a
+    /// readable expression that keeps the percentage, e.g. `hole_d / 2 + hole_d * 2.5 / 100`.
+    PercentOfD(f64),
 }
 
 #[derive(Debug, Clone)]
@@ -34,9 +37,9 @@ struct Options {
     all_in_sketch: bool,
 }
 
-/// Default tip: this many percent of the radius above the circle. Enough to bridge the
-/// sagging top of a printed hole without changing its shape much.
-const DEFAULT_TIP_EXTRA: f64 = 5.0;
+/// Default tip: this many percent of the diameter above the circle (= 5 % of the radius).
+/// Enough to bridge the sagging top of a printed hole without changing its shape much.
+const DEFAULT_TIP_EXTRA_D: f64 = 2.5;
 
 #[derive(Debug, Clone, PartialEq)]
 struct Target {
@@ -118,19 +121,31 @@ fn parse_options(params: &Value) -> Result<Options> {
             return Err(Error::input("overhang_angle", "must be between 0 and 90 degrees"));
         }
     }
-    let extra = match params.get("tip_extra") {
-        None | Some(Value::Null) => DEFAULT_TIP_EXTRA,
-        Some(v) => v
-            .as_f64()
-            .ok_or_else(|| Error::input("tip_extra", "must be a number (percent of the radius)"))?,
+    // Tip above the circle as a share of the radius. The form field `tip_extra_d` is in percent
+    // of the diameter; the older `tip_extra` (percent of the radius) is still read from scripts.
+    let percent = |key: &str, of: &str| -> Result<Option<f64>> {
+        match params.get(key) {
+            None | Some(Value::Null) => Ok(None),
+            Some(v) => {
+                let p = v
+                    .as_f64()
+                    .ok_or_else(|| Error::input(key, format!("must be a number (percent of the {of})")))?;
+                if !(p > 0.0) {
+                    return Err(Error::input(key, format!("must be more than 0 % of the {of}")));
+                }
+                Ok(Some(p))
+            }
+        }
     };
-    if !(extra > 0.0) {
-        return Err(Error::input("tip_extra", "must be more than 0 % of the radius"));
-    }
+    let extra_d = match (percent("tip_extra_d", "diameter")?, percent("tip_extra", "radius")?) {
+        (Some(p), _) => p,
+        (None, Some(p)) => p / 2.0,
+        (None, None) => DEFAULT_TIP_EXTRA_D,
+    };
     let tip = match (expr_field(params, "tip_height")?, overhang) {
         (Some(e), _) => TipSpec::Height(e),
         (None, Some(a)) => TipSpec::Angle(a),
-        (None, None) => TipSpec::Height(format!("{} * r", num_fmt(1.0 + extra / 100.0))),
+        (None, None) => TipSpec::PercentOfD(extra_d),
     };
     let warn_horizontal = match params.get("warn_horizontal") {
         None | Some(Value::Null) => true,
@@ -138,7 +153,12 @@ fn parse_options(params: &Value) -> Result<Options> {
             .as_bool()
             .ok_or_else(|| Error::input("warn_horizontal", "must be true or false"))?,
     };
-    let all_in_sketch = match params.get("scope") {
+    let apply_to_all = match params.get("apply_to_all") {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(v.as_bool().ok_or_else(|| Error::input("apply_to_all", "must be true or false"))?),
+    };
+    // `scope` is the older string form, still accepted from scripts.
+    let scope = match params.get("scope") {
         None | Some(Value::Null) => false,
         Some(Value::String(s)) => match s.trim().to_ascii_lowercase().as_str() {
             "" | "selected" | "selection" => false,
@@ -147,6 +167,7 @@ fn parse_options(params: &Value) -> Result<Options> {
         },
         Some(_) => return Err(Error::input("scope", "must be selected or all in sketch")),
     };
+    let all_in_sketch = apply_to_all.unwrap_or(scope);
     Ok(Options {
         all_in_sketch,
         circles,
@@ -157,8 +178,41 @@ fn parse_options(params: &Value) -> Result<Options> {
     })
 }
 
-/// Replace the identifier `r` in an expression with `radius` (parenthesised).
-pub fn substitute_r(expr: &str, radius: &str) -> String {
+/// `e` as an operand: bare when it is a single name or number (`hole_r`, `23`, `8 mm`),
+/// otherwise in parentheses.
+fn operand(e: &str) -> String {
+    let e = e.trim();
+    if !e.is_empty() && !e.contains(|c: char| "+-*/^(),".contains(c)) {
+        e.to_string()
+    } else {
+        format!("({e})")
+    }
+}
+
+/// The default tip distance as an expression the user can read and edit: the percentage stays
+/// visible instead of being folded into a factor. `size` is the circle's radius or diameter
+/// dimension; without one the measured radius is used.
+fn percent_tip_expr(size: Option<&(String, String)>, radius: f64, p: f64) -> String {
+    let p = num_fmt(p);
+    match size {
+        Some((t, e)) if t == "radius" => {
+            let r = operand(e);
+            format!("{r} + 2 * {r} * {p} / 100")
+        }
+        Some((_, e)) => {
+            let d = operand(e);
+            format!("{d} / 2 + {d} * {p} / 100")
+        }
+        None => {
+            let d = format!("{} mm", num_fmt(2.0 * radius));
+            format!("{d} / 2 + {d} * {p} / 100")
+        }
+    }
+}
+
+/// Replace the identifiers `r` and `d` in an expression with `radius` and `diameter`
+/// (parenthesised).
+pub fn substitute_rd(expr: &str, radius: &str, diameter: &str) -> String {
     let mut out = String::with_capacity(expr.len() + radius.len());
     let chars: Vec<char> = expr.chars().collect();
     let mut i = 0;
@@ -170,14 +224,17 @@ pub fn substitute_r(expr: &str, radius: &str) -> String {
                 i += 1;
             }
             let ident: String = chars[start..i].iter().collect();
-            // A digit directly before (as in "2r") would glue to the identifier: add a `*`.
-            if ident == "r" {
+            let value = match ident.as_str() {
+                "r" => Some(radius),
+                "d" => Some(diameter),
+                _ => None,
+            };
+            if let Some(value) = value {
+                // A digit directly before (as in "2r") would glue to the identifier: add a `*`.
                 if out.chars().last().is_some_and(|p| p.is_ascii_digit() || p == '.') {
                     out.push('*');
                 }
-                out.push('(');
-                out.push_str(radius);
-                out.push(')');
+                out.push_str(&operand(value));
             } else {
                 out.push_str(&ident);
             }
@@ -251,7 +308,7 @@ fn no_circle_selected(items: &[Value]) -> String {
         format!("the selection holds {}: {}", items.len(), kinds.join(", "))
     };
     format!(
-        "no sketch circle selected ({what}). Press Esc to end the active sketch tool, click the circles, then run; or set Circles to `all in sketch`"
+        "no sketch circle selected ({what}). Press Esc to end the active sketch tool, click the circles, then run; or tick `Apply to all circles in sketch`"
     )
 }
 
@@ -429,20 +486,22 @@ fn convert(host: &mut dyn Host, opts: &Options, up_spec: &UpSpec, id: &str) -> R
         }
     };
 
-    // `r` in the user's expressions is the circle's own radius expression, so the tip follows it.
-    let r_expr = match &info.size_dim {
-        Some((t, e)) if t == "diameter" => format!("({e}) / 2"),
-        Some((_, e)) => e.clone(),
-        None => format!("{} mm", num_fmt(info.radius)),
+    // `r` and `d` in the user's expressions are the circle's own size expression, so the tip
+    // follows it.
+    let (r_expr, d_expr) = match &info.size_dim {
+        Some((t, e)) if t == "diameter" => (format!("{} / 2", operand(e)), e.clone()),
+        Some((_, e)) => (e.clone(), format!("2 * {}", operand(e))),
+        None => (format!("{} mm", num_fmt(info.radius)), format!("{} mm", num_fmt(2.0 * info.radius))),
     };
     let tip_expr = match &opts.tip {
         TipSpec::Angle(_) => None,
-        TipSpec::Height(e) => Some(substitute_r(e, &r_expr)),
+        TipSpec::Height(e) => Some(substitute_rd(e, &r_expr, &d_expr)),
+        TipSpec::PercentOfD(p) => Some(percent_tip_expr(info.size_dim.as_ref(), info.radius, *p)),
     };
     let tip = match (&opts.tip, &tip_expr) {
         (_, Some(e)) => Tip::Height(evaluate(host, "tip_height", e)?),
         (TipSpec::Angle(a), None) => Tip::Angle(*a),
-        (TipSpec::Height(_), None) => unreachable!("a height always has an expression"),
+        (_, None) => unreachable!("a height always has an expression"),
     };
     let td = geometry::teardrop(info.center_at, info.radius, up, tip).map_err(|e| {
         let field = if e.contains("tip") { "tip_height" } else { "overhang_angle" };
@@ -541,6 +600,7 @@ fn convert(host: &mut dyn Host, opts: &Options, up_spec: &UpSpec, id: &str) -> R
         "up": [up.x, up.y],
         "radius": info.radius,
         "tip_height": td.tip_dist,
+        "tip_expression": tip_expr,
         "overhang_deg": 90.0 - td.apex_deg / 2.0,
         "dof": dof_after,
         "warnings": warnings,
@@ -565,7 +625,7 @@ pub fn run(host: &mut dyn Host, params: &Value) -> Result<Value> {
             .filter(|id| circle_info(&sk, id).is_ok())
             .collect();
         if ids.is_empty() {
-            return Err(Error::input("scope", "the open sketch has no (non-construction) circle"));
+            return Err(Error::input("apply_to_all", "the open sketch has no (non-construction) circle"));
         }
     }
     if from_selection {
@@ -599,22 +659,38 @@ mod tests {
     use super::*;
 
     #[test]
-    fn substitutes_r() {
-        assert_eq!(substitute_r("r*sqrt(2)", "hole_r"), "(hole_r)*sqrt(2)");
-        assert_eq!(substitute_r("1.2*r + 0.3 mm", "d1"), "1.2*(d1) + 0.3 mm");
-        assert_eq!(substitute_r("2r", "d1"), "2*(d1)");
-        assert_eq!(substitute_r("rr + r_1 + r", "x"), "rr + r_1 + (x)");
+    fn substitutes_r_and_d() {
+        assert_eq!(substitute_rd("r*sqrt(2)", "hole_r", "D"), "hole_r*sqrt(2)");
+        assert_eq!(substitute_rd("1.2*r + 0.3 mm", "d1", "D"), "1.2*d1 + 0.3 mm");
+        assert_eq!(substitute_rd("2r", "d1", "D"), "2*d1");
+        assert_eq!(substitute_rd("rr + r_1 + r", "x", "D"), "rr + r_1 + x");
+        assert_eq!(substitute_rd("d/2 + 0.3 mm", "x", "hole_d"), "hole_d/2 + 0.3 mm");
+        assert_eq!(substitute_rd("0.6d + dd + d1", "x", "D"), "0.6*D + dd + d1");
+        // Compound values keep their parentheses.
+        assert_eq!(substitute_rd("1.2*r", "23 / 2", "23"), "1.2*(23 / 2)");
+        assert_eq!(substitute_rd("2*d", "x", "a+b"), "2*(a+b)");
+    }
+
+    #[test]
+    fn percent_tip_is_readable() {
+        let dia = ("diameter".to_string(), "23".to_string());
+        assert_eq!(percent_tip_expr(Some(&dia), 11.5, 2.5), "23 / 2 + 23 * 2.5 / 100");
+        let rad = ("radius".to_string(), "hole_r".to_string());
+        assert_eq!(percent_tip_expr(Some(&rad), 4.0, 2.5), "hole_r + 2 * hole_r * 2.5 / 100");
+        let rad = ("radius".to_string(), "hole_d / 2".to_string());
+        assert_eq!(percent_tip_expr(Some(&rad), 4.0, 3.0), "(hole_d / 2) + 2 * (hole_d / 2) * 3 / 100");
+        assert_eq!(percent_tip_expr(None, 4.0, 2.5), "8 mm / 2 + 8 mm * 2.5 / 100");
     }
 
     #[test]
     fn options_defaults() {
         let o = parse_options(&json!({})).unwrap();
         assert_eq!(o.up, UpSpec::Auto);
-        assert_eq!(o.tip, TipSpec::Height("1.05 * r".into()));
+        assert_eq!(o.tip, TipSpec::PercentOfD(2.5));
         assert!(o.circles.is_empty() && o.warn_horizontal);
         let o = parse_options(&json!({"circles": ["c1", {"id": "c4", "sketch": 2}], "tip_height": "", "up": "+x"})).unwrap();
         assert_eq!(o.circles.len(), 2);
-        assert_eq!(o.tip, TipSpec::Height("1.05 * r".into()));
+        assert_eq!(o.tip, TipSpec::PercentOfD(2.5));
         assert_eq!(o.up, UpSpec::Explicit(Vec2::new(1.0, 0.0)));
         assert!(parse_options(&json!({"overhang_angle": 95})).is_err());
         assert!(parse_options(&json!({"up": "oben"})).is_err());
@@ -622,10 +698,17 @@ mod tests {
 
     #[test]
     fn tip_precedence() {
-        // tip_extra in percent of r.
+        // tip_extra_d in percent of the diameter.
+        let o = parse_options(&json!({"tip_extra_d": 6})).unwrap();
+        assert_eq!(o.tip, TipSpec::PercentOfD(6.0));
+        assert!(parse_options(&json!({"tip_extra_d": 0})).is_err());
+        assert!(parse_options(&json!({"tip_extra_d": "x"})).is_err());
+        // The older tip_extra (percent of r) still works from scripts; tip_extra_d wins.
         let o = parse_options(&json!({"tip_extra": 12.5})).unwrap();
-        assert_eq!(o.tip, TipSpec::Height("1.125 * r".into()));
+        assert_eq!(o.tip, TipSpec::PercentOfD(6.25));
         assert!(parse_options(&json!({"tip_extra": 0})).is_err());
+        let o = parse_options(&json!({"tip_extra": 12.5, "tip_extra_d": 2.5})).unwrap();
+        assert_eq!(o.tip, TipSpec::PercentOfD(2.5));
         // An overhang angle (scripts) beats tip_extra, an explicit height beats both.
         let o = parse_options(&json!({"tip_extra": 5, "overhang_angle": 45})).unwrap();
         assert_eq!(o.tip, TipSpec::Angle(45.0));
@@ -636,10 +719,10 @@ mod tests {
     /// What the generated form sends: every field, with its defaults.
     #[test]
     fn options_from_form() {
-        let form = json!({"up": "auto", "up_angle": 90, "warn_horizontal": true, "tip_extra": 5, "tip_height": ""});
+        let form = json!({"apply_to_all": false, "up": "auto", "up_angle": 90, "warn_horizontal": true, "tip_extra_d": 2.5, "tip_height": ""});
         let o = parse_options(&form).unwrap();
         assert_eq!(o.up, UpSpec::Auto);
-        assert_eq!(o.tip, TipSpec::Height("1.05 * r".into()));
+        assert_eq!(o.tip, TipSpec::PercentOfD(2.5));
         assert!(o.circles.is_empty() && o.sketch.is_none() && o.warn_horizontal);
         assert!(!parse_options(&json!({"warn_horizontal": false})).unwrap().warn_horizontal);
         assert!(parse_options(&json!({"warn_horizontal": "no"})).is_err());
@@ -652,6 +735,11 @@ mod tests {
         assert!(!parse_options(&json!({"scope": "selected"})).unwrap().all_in_sketch);
         assert!(parse_options(&json!({"scope": "all in sketch"})).unwrap().all_in_sketch);
         assert!(parse_options(&json!({"scope": "some"})).is_err());
+        assert!(!parse_options(&json!({"apply_to_all": false})).unwrap().all_in_sketch);
+        assert!(parse_options(&json!({"apply_to_all": true})).unwrap().all_in_sketch);
+        assert!(parse_options(&json!({"apply_to_all": "yes"})).is_err());
+        // The checkbox wins over the older `scope` string.
+        assert!(!parse_options(&json!({"apply_to_all": false, "scope": "all"})).unwrap().all_in_sketch);
     }
 
     #[test]

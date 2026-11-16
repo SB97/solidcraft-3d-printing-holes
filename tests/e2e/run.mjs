@@ -74,7 +74,7 @@ const tail = (r2, extrude = {}) => [
 ];
 
 /** Every form field at its manifest default, as the generated dialog submits them. */
-const FORM = { scope: "selected", up: "auto", up_angle: 90, warn_horizontal: true, tip_extra: 5, tip_height: "" };
+const FORM = { apply_to_all: false, up: "auto", up_angle: 90, warn_horizontal: true, tip_extra_d: 2.5, tip_height: "" };
 
 /** A pointed tip at k * r: the flanks touch the circle at acos(1/k) from up. */
 const low = (k) => (r) => area(r, { phiDeg: (Math.acos(1 / k) * 180) / PI, d: k * r });
@@ -82,13 +82,20 @@ const S30 = Math.sin(PI / 6), C30 = Math.cos(PI / 6);
 
 const scenarios = [
   {
-    name: "default: tip 5 % of r above the circle, from selection, up = auto (world +Z)",
+    name: "default: tip 2.5 % of the diameter above the circle, from selection, up = auto (world +Z)",
     steps: [...base(), plugin({}), ...tail(6)],
+    tipExpr: "hole_r + 2 * hole_r * 2.5 / 100",
     area: low(1.05),
     tipZ: (r) => CZ + 1.05 * r,
   },
   {
-    name: "tip_extra 12 %",
+    name: "tip_extra_d 6 % (= 12 % of r)",
+    steps: [...base(), plugin({ tip_extra_d: 6 }), ...tail(6)],
+    area: low(1.12),
+    tipZ: (r) => CZ + 1.12 * r,
+  },
+  {
+    name: "older tip_extra 12 % of r (scripts)",
     steps: [...base(), plugin({ tip_extra: 12 }), ...tail(6)],
     area: low(1.12),
     tipZ: (r) => CZ + 1.12 * r,
@@ -102,6 +109,12 @@ const scenarios = [
   {
     name: "tip_height override 1.2*r",
     steps: [...base(), plugin({ tip_height: "1.2*r" }), ...tail(6)],
+    area: low(1.2),
+    tipZ: (r) => CZ + 1.2 * r,
+  },
+  {
+    name: "tip_height override with d: 0.6*d",
+    steps: [...base(), plugin({ tip_height: "0.6*d" }), ...tail(6)],
     area: low(1.2),
     tipZ: (r) => CZ + 1.2 * r,
   },
@@ -125,8 +138,8 @@ const scenarios = [
     tipZ: (r) => CZ + 1.05 * r,
   },
   {
-    name: "form: Circles = all in sketch, nothing selected",
-    steps: [...base({ select: false }), plugin({ ...FORM, scope: "all in sketch" }), ...tail(6)],
+    name: "form: Apply to all circles in sketch, nothing selected",
+    steps: [...base({ select: false }), plugin({ ...FORM, apply_to_all: true }), ...tail(6)],
     area: low(1.05),
     tipZ: (r) => CZ + 1.05 * r,
   },
@@ -184,6 +197,11 @@ for (const s of scenarios) {
     console.log(`  ${ok ? "ok  " : "FAIL"} sketch being edited afterwards: ${doc.active_sketch} (expected ${s.activeAfter})`);
   }
   if (conv.warnings.length) console.log("  warnings:", conv.warnings);
+  if (s.tipExpr !== undefined) {
+    const ok = conv.tip_expression === s.tipExpr;
+    if (!ok) failed++;
+    console.log(`  ${ok ? "ok  " : "FAIL"} tip expression: ${conv.tip_expression} (expected ${s.tipExpr})`);
+  }
   const sk = res[n - 6];
   if (sk.dof !== 0) failed++;
   console.log(`  ${sk.dof === 0 ? "ok  " : "FAIL"} dof ${sk.dof}`);
@@ -229,7 +247,7 @@ for (const [name, extra, wantWarning] of [
 console.log("\n# refusals");
 for (const [name, steps, needle] of [
   ["tip_height below the radius", [...base(), plugin({ tip_height: "0.9*r" })], "tip must lie above"],
-  ["tip_extra 0", [...base(), plugin({ tip_extra: 0 })], "tip_extra"],
+  ["tip_extra_d 0", [...base(), plugin({ tip_extra_d: 0 })], "tip_extra_d"],
   ["form, nothing selected", [...base({ select: false }), plugin(FORM)], "nothing is selected"],
 ]) {
   const r = run(steps);

@@ -2,11 +2,11 @@
 
 Holes that print well. First feature: **Teardrop**.
 
-![Default teardrop with a tip 5 % of the radius above the circle (left) and a classic 45° teardrop (right); the arrow is the print direction](docs/teardrop.png)
+![Default teardrop with a tip 2.5 % of the diameter above the circle (left) and a classic 45° teardrop (right); the arrow is the print direction](docs/teardrop.png)
 
 A horizontal hole in a vertical wall has a flat ceiling that sags when it is printed.
 The teardrop replaces that ceiling with two tangent flanks that meet in a small tip.
-By default the tip sits only **5 % of the radius** above the circle. That is enough to make up for
+By default the tip sits only **2.5 % of the diameter** above the circle. That is enough to make up for
 the sag, and the hole stays practically round. The classic 45° teardrop is still available.
 
 ## Usage
@@ -23,7 +23,7 @@ than the one being edited (SolidCraft reports it as `external_sketch_curve`), th
 sketch, converts the circle in its own sketch and then reopens the sketch you were in.
 
 If the plugin finds no selected circle, the error message says what was selected instead.
-Alternatively, **Circles = `all in sketch`** converts every circle of the open sketch.
+Alternatively, tick **Apply to all circles in sketch** to convert every circle of the open sketch without selecting anything.
 
 SolidCraft builds the form itself from the input schema in the manifest.
 The whole run is a single undo step.
@@ -33,7 +33,7 @@ The result is ordinary, constrained sketch geometry:
 
 - **Construction line centre → tip:** shows permanently in the sketch where "up" is.
 - **Radius:** the circle's radius or diameter dimension moves to the arc together with its expression. Change the parameter and the whole teardrop follows.
-- **Tip:** held by a length dimension with an expression, e.g. `1.05 * (hole_r)`. When the radius changes the tip moves with it, without running the plugin again.
+- **Tip:** held by a length dimension with an expression that keeps the percentage visible, e.g. `hole_d / 2 + hole_d * 2.5 / 100` (or `hole_r + 2 * hole_r * 2.5 / 100` for a radius dimension). Edit the `2.5` there to change one hole afterwards; when the size changes the tip moves with it, without running the plugin again.
 
 ### Form fields
 
@@ -41,26 +41,26 @@ In the order the form shows them:
 
 | Field | Default | Meaning |
 |---|---|---|
-| **Circles** (`scope`) | `selected` | `selected` = the selected sketch circles; `all in sketch` = all (non-construction) circles of the open sketch |
-| **Tip above circle (% of r)** (`tip_extra`) | `5` | How far the tip rises above the circle, in percent of the radius |
-| **Tip height** (`tip_height`) | empty | Override: distance centre → tip, in mm or as an expression with `r` = radius, e.g. `r + 0.3 mm` or `r*sqrt(2)` (classic 45°) |
+| **Apply to all circles in sketch** (`apply_to_all`) | off | Off = only the selected sketch circles; on = all (non-construction) circles of the open sketch |
+| **Tip above circle (% of Ø)** (`tip_extra_d`) | `2.5` | How far the tip rises above the circle, in percent of the diameter: the hole gets that much taller at the top |
+| **Tip height** (`tip_height`) | empty | Override: distance centre → tip, in mm or as an expression with `r` = radius and `d` = diameter, e.g. `d/2 + 0.3 mm` or `d*sqrt(2)/2` (classic 45°) |
 | **Up (tip direction)** (`up`) | `auto` | Direction of the tip: `auto` = world +Z (print direction) projected into the sketch plane; `+x`, `-x`, `+y`, `-y` = sketch axes; `angle` = the angle from **Up angle** |
 | **Up angle (deg)** (`up_angle`) | `90` | Only with Up = `angle`: angle in degrees from the sketch X axis (90 = sketch +Y) |
 | **Warn on horizontal sketch** (`warn_horizontal`) | on | Warn when Up = `auto` finds no direction on a horizontal sketch (see below) |
 
-Script/CLI only (not in the form): `circles` (circle ids `"c1"` or `{id, sketch}`, empty = selection) and `sketch` (sketch id/name when no sketch is open).
-There, `up` also takes an angle directly, e.g. `"300"`. `overhang_angle` (degrees from the horizontal) builds the teardrop with an angle constraint instead of the height and takes precedence over `tip_extra`.
+Script/CLI only (not in the form): `tip_extra` (older form of `tip_extra_d`, in percent of the radius; `tip_extra_d` wins), `scope` (older form of `apply_to_all`: `"selected"` or `"all in sketch"`), `circles` (circle ids `"c1"` or `{id, sketch}`, empty = selection) and `sketch` (sketch id/name when no sketch is open).
+There, `up` also takes an angle directly, e.g. `"300"`. `overhang_angle` (degrees from the horizontal) builds the teardrop with an angle constraint instead of the height and takes precedence over `tip_extra_d`.
 
 ### Formulas
 
-- Default: **h = r·(1 + p/100)** with p = `tip_extra`, i.e. **h = 1.05·r** at 5 %.
-- The flanks touch the circle at the angle φ = acos(r/h) from "up" (at 5 %: φ ≈ 17.8°) and are inclined φ to the horizontal.
+- Default: **h = r + d·p/100** with p = `tip_extra_d`, i.e. **h = 1.05·r** at 2.5 %. The hole is d·(1 + p/100) tall.
+- The flanks touch the circle at the angle φ = acos(r/h) from "up" (at 2.5 %: φ ≈ 17.8°) and are inclined φ to the horizontal.
   So the tip only bridges a short chord of 2·r·sin φ (≈ 0.61·r) instead of the whole hole width.
-- Area: r²·(π − φ) + r·h·sin φ; at 5 % that is only ≈ 0.3 % more than the circle.
+- Area: r²·(π − φ) + r·h·sin φ; at 2.5 % that is only ≈ 0.3 % more than the circle.
 - Classic with overhang angle α: h = r / cos(α), so h = r·√2 ≈ 1.414·r at 45°.
 
-The sag is more of a fixed distance (one or two layer heights) than a fraction of the radius.
-For very large or very small holes an expression like `tip_height = r + 0.3 mm` is often a better fit.
+The sag is more of a fixed distance (one or two layer heights) than a fraction of the diameter.
+For very large or very small holes an expression like `tip_height = d/2 + 0.3 mm` is often a better fit.
 
 **Horizontal sketches:** the CAD orientation is not always the print orientation.
 On a horizontal sketch, Up = `auto` gives no direction, so the tip points to sketch +Y.
