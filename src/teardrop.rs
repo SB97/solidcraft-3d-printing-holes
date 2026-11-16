@@ -38,7 +38,7 @@ struct Options {
 }
 
 const UP_CHOICES: &str =
-    "must be world +Z (print up), sketch +X, sketch -X, sketch +Y, sketch -Y, angle in sketch or an angle in degrees";
+    "must be world +Z (print up), sketch +X, sketch -X, sketch +Y, sketch -Y or an angle in degrees";
 
 /// Default tip: this many percent of the diameter above the circle (= 5 % of the radius).
 /// Enough to bridge the sagging top of a printed hole without changing its shape much.
@@ -91,8 +91,8 @@ fn parse_options(params: &Value) -> Result<Options> {
         Some(v @ Value::String(_)) | Some(v @ Value::Object(_)) => vec![parse_target(v)?],
         Some(_) => return Err(Error::input("circles", "must be a list of sketch circle ids")),
     };
-    // Form values ("world +Z (print up)", "sketch +X", ..., "angle in sketch") and the older
-    // script values ("auto", "+x", ..., "angle", or an angle in degrees) are both accepted.
+    // Form values ("world +Z (print up)", "sketch +X", ...) and the script values ("auto", "+x",
+    // ..., or an angle in degrees from sketch +X) are both accepted.
     let up_text = match params.get("up") {
         Some(Value::String(s)) => {
             let t = s.trim().to_ascii_lowercase();
@@ -107,16 +107,6 @@ fn parse_options(params: &Value) -> Result<Options> {
             geometry::parse_up(&n.to_string()).map_err(|e| Error::input("up", e))?,
         ),
         (_, Some(t)) if t.is_empty() || t == "auto" || t.starts_with("world +z") || t == "world z" => UpSpec::Auto,
-        // "angle in sketch" takes the direction from the separate `up_angle` field.
-        (_, Some("angle" | "angle in sketch")) => {
-            let a = match params.get("up_angle") {
-                None | Some(Value::Null) => 90.0,
-                Some(v) => v
-                    .as_f64()
-                    .ok_or_else(|| Error::input("up_angle", "must be a number of degrees"))?,
-            };
-            UpSpec::Explicit(geometry::parse_up(&a.to_string()).map_err(|e| Error::input("up_angle", e))?)
-        }
         (_, Some(t)) => UpSpec::Explicit(geometry::parse_up(t).map_err(|e| Error::input("up", e))?),
         _ => return Err(Error::input("up", UP_CHOICES)),
     };
@@ -494,7 +484,7 @@ fn convert(host: &mut dyn Host, opts: &Options, up_spec: &UpSpec, id: &str) -> R
                     }
                     Vec2::new(0.0, 1.0)
                 }),
-                _ => return Err(Error::input("up", "the sketch reports no plane; set Tip direction to a sketch axis or angle in sketch")),
+                _ => return Err(Error::input("up", "the sketch reports no plane; set Tip direction to a sketch axis")),
             }
         }
     };
@@ -732,26 +722,22 @@ mod tests {
     /// What the generated form sends: every field, with its defaults.
     #[test]
     fn options_from_form() {
-        let form = json!({"apply_to_all": false, "up": "world +Z (print up)", "up_angle": 90, "warn_horizontal": true, "tip_extra_d": 2.5, "tip_height": ""});
+        let form = json!({"apply_to_all": false, "up": "world +Z (print up)", "warn_horizontal": true, "tip_extra_d": 2.5, "tip_height": ""});
         let o = parse_options(&form).unwrap();
         assert_eq!(o.up, UpSpec::Auto);
         assert_eq!(o.tip, TipSpec::PercentOfD(2.5));
         assert!(o.circles.is_empty() && o.sketch.is_none() && o.warn_horizontal);
         assert!(!parse_options(&json!({"warn_horizontal": false})).unwrap().warn_horizontal);
         assert!(parse_options(&json!({"warn_horizontal": "no"})).is_err());
-        let o = parse_options(&json!({"up": "angle in sketch", "up_angle": 180})).unwrap();
-        assert_eq!(o.up, UpSpec::Explicit(geometry::parse_up("180").unwrap()));
         for (v, want) in [("sketch +X", (1.0, 0.0)), ("sketch -X", (-1.0, 0.0)), ("sketch +Y", (0.0, 1.0)), ("sketch -Y", (0.0, -1.0))] {
             assert_eq!(parse_options(&json!({"up": v})).unwrap().up, UpSpec::Explicit(Vec2::new(want.0, want.1)), "{v}");
         }
         // Older script values still work.
         assert_eq!(parse_options(&json!({"up": "auto"})).unwrap().up, UpSpec::Auto);
-        let o = parse_options(&json!({"up": "angle", "up_angle": 180})).unwrap();
-        assert_eq!(o.up, UpSpec::Explicit(geometry::parse_up("180").unwrap()));
-        // up_angle only counts with up = angle.
-        let o = parse_options(&json!({"up": "sketch -Y", "up_angle": 180})).unwrap();
-        assert_eq!(o.up, UpSpec::Explicit(Vec2::new(0.0, -1.0)));
-        assert!(parse_options(&json!({"up": "angle", "up_angle": "x"})).is_err());
+        assert_eq!(parse_options(&json!({"up": "-y"})).unwrap().up, UpSpec::Explicit(Vec2::new(0.0, -1.0)));
+        // Scripts can still give any angle in degrees from sketch +X.
+        assert_eq!(parse_options(&json!({"up": "180"})).unwrap().up, UpSpec::Explicit(geometry::parse_up("180").unwrap()));
+        assert_eq!(parse_options(&json!({"up": 180})).unwrap().up, UpSpec::Explicit(geometry::parse_up("180").unwrap()));
         assert!(!parse_options(&json!({"scope": "selected"})).unwrap().all_in_sketch);
         assert!(parse_options(&json!({"scope": "all in sketch"})).unwrap().all_in_sketch);
         assert!(parse_options(&json!({"scope": "some"})).is_err());

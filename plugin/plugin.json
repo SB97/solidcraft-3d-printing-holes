@@ -34,22 +34,15 @@
             "up": {
               "type": "string",
               "title": "Tip direction",
-              "description": "Where the tip points. world +Z (print up) = world +Z projected into the sketch plane, the usual print direction; sketch +X / -X / +Y / -Y = the sketch's own axes; angle in sketch = the Tip angle below.",
+              "description": "Where the tip points. world +Z (print up) = world +Z projected into the sketch plane, the usual print direction; sketch +X / -X / +Y / -Y = the sketch's own axes.",
               "enum": [
                 "world +Z (print up)",
                 "sketch +X",
                 "sketch -X",
                 "sketch +Y",
-                "sketch -Y",
-                "angle in sketch"
+                "sketch -Y"
               ],
               "default": "world +Z (print up)"
-            },
-            "up_angle": {
-              "type": "number",
-              "title": "Tip angle in sketch (deg)",
-              "description": "Only with Tip direction = angle in sketch: direction of the tip in degrees from sketch +X, counter-clockwise (90 = sketch +Y).",
-              "default": 90
             },
             "warn_horizontal": {
               "type": "boolean",

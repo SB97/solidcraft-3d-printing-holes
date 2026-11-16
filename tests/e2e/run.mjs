@@ -74,7 +74,7 @@ const tail = (r2, extrude = {}) => [
 ];
 
 /** Every form field at its manifest default, as the generated dialog submits them. */
-const FORM = { apply_to_all: false, up: "world +Z (print up)", up_angle: 90, warn_horizontal: true, tip_extra_d: 2.5, tip_height: "" };
+const FORM = { apply_to_all: false, up: "world +Z (print up)", warn_horizontal: true, tip_extra_d: 2.5, tip_height: "" };
 
 /** A pointed tip at k * r: the flanks touch the circle at acos(1/k) from up. */
 const low = (k) => (r) => area(r, { phiDeg: (Math.acos(1 / k) * 180) / PI, d: k * r });
@@ -161,13 +161,6 @@ const scenarios = [
     activeAfter: 3,
     area: low(1.05),
     tipZ: (r) => CZ + 1.05 * r,
-  },
-  {
-    name: "form: Tip direction = angle in sketch, 300°",
-    steps: [...base(), plugin({ ...FORM, up: "angle in sketch", up_angle: 300 }), ...tail(6)],
-    area: low(1.05),
-    tipZ: (r) => CZ + 1.05 * r * C30,
-    tipX: (r) => 1.05 * r * S30,
   },
 ];
 
