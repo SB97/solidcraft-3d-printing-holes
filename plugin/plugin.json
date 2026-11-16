@@ -1,7 +1,7 @@
 {
   "id": "solidcraft-3d-printing-holes",
   "name": "3D Printing Holes",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Holes made for 3D printing. Teardrop: select sketch circles, then run it; each gets a small tip a few percent of the diameter above it (it follows the diameter), so the top of a horizontal hole does not sag.",
   "capabilities": [
     "commands@0.1"
