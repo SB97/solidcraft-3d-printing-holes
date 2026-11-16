@@ -40,16 +40,11 @@ const BLOCK = 20 * 10 * 20;
 const DEPTH = 10;
 const CZ = 10; // world Z of the hole centre
 
-/** Area of the teardrop: phi from up to each tangent point, d = tip distance, optional flat cap at c. */
-function area(r, { phiDeg = 45, d, c } = {}) {
+/** Area of the teardrop: phi from up to each tangent point, d = tip distance. */
+function area(r, { phiDeg = 45, d } = {}) {
   const phi = (phiDeg * PI) / 180;
   d ??= r / Math.cos(phi);
-  let a = r * r * (PI - phi) + r * d * Math.sin(phi);
-  if (c !== undefined) {
-    const half = (r * Math.sin(phi) * (d - c)) / (d - r * Math.cos(phi));
-    a -= half * (d - c);
-  }
-  return a;
+  return r * r * (PI - phi) + r * d * Math.sin(phi);
 }
 
 function base({ select = true } = {}) {
@@ -79,7 +74,7 @@ const tail = (r2, extrude = {}) => [
 ];
 
 /** Every form field at its manifest default, as the generated dialog submits them. */
-const FORM = { scope: "selected", up: "auto", up_angle: 90, warn_horizontal: true, tip_extra: 5, tip_height: "", flat_top: "" };
+const FORM = { scope: "selected", up: "auto", up_angle: 90, warn_horizontal: true, tip_extra: 5, tip_height: "" };
 
 /** A pointed tip at k * r: the flanks touch the circle at acos(1/k) from up. */
 const low = (k) => (r) => area(r, { phiDeg: (Math.acos(1 / k) * 180) / PI, d: k * r });
@@ -118,16 +113,10 @@ const scenarios = [
     tipX: (r) => 1.05 * r * S30,
   },
   {
-    name: "classic 45° (overhang_angle) with flat top at r",
-    steps: [...base(), plugin({ overhang_angle: 45, flat_top: "r" }), ...tail(6)],
-    area: (r) => area(r, { c: r }),
-    tipZ: (r) => CZ + r,
-  },
-  {
-    name: "flat top 1.1*r with tip_height 1.5*r",
-    steps: [...base(), plugin({ flat_top: "1.1*r", tip_height: "1.5*r" }), ...tail(6)],
-    area: (r) => area(r, { phiDeg: (Math.acos(1 / 1.5) * 180) / PI, d: 1.5 * r, c: 1.1 * r }),
-    tipZ: (r) => CZ + 1.1 * r,
+    name: "classic 45° (overhang_angle)",
+    steps: [...base(), plugin({ overhang_angle: 45 }), ...tail(6)],
+    area: (r) => area(r),
+    tipZ: (r) => CZ + r * Math.SQRT2,
   },
   {
     name: "form defaults (what the GUI dialog sends)",

@@ -37,15 +37,16 @@ The result is ordinary, constrained sketch geometry:
 
 ### Form fields
 
+In the order the form shows them:
+
 | Field | Default | Meaning |
 |---|---|---|
 | **Circles** (`scope`) | `selected` | `selected` = the selected sketch circles; `all in sketch` = all (non-construction) circles of the open sketch |
-| **Up** (`up`) | `auto` | Direction of the tip: `auto` = world +Z (print direction) projected into the sketch plane; `+x`, `-x`, `+y`, `-y` = sketch axes; `angle` = angle from the next field |
-| **Up angle** (`up_angle`) | `90` | Only with Up = `angle`: angle in degrees from the sketch X axis (90 = sketch +Y) |
-| **Warn on horizontal sketch** (`warn_horizontal`) | on | Warn when Up = `auto` finds no direction on a horizontal sketch (see below) |
 | **Tip above circle (% of r)** (`tip_extra`) | `5` | How far the tip rises above the circle, in percent of the radius |
 | **Tip height** (`tip_height`) | empty | Override: distance centre → tip, in mm or as an expression with `r` = radius, e.g. `r + 0.3 mm` or `r*sqrt(2)` (classic 45°) |
-| **Flat top at** (`flat_top`) | empty | Cut the tip flat at this distance from the centre, e.g. `r` |
+| **Up (tip direction)** (`up`) | `auto` | Direction of the tip: `auto` = world +Z (print direction) projected into the sketch plane; `+x`, `-x`, `+y`, `-y` = sketch axes; `angle` = the angle from **Up angle** |
+| **Up angle (deg)** (`up_angle`) | `90` | Only with Up = `angle`: angle in degrees from the sketch X axis (90 = sketch +Y) |
+| **Warn on horizontal sketch** (`warn_horizontal`) | on | Warn when Up = `auto` finds no direction on a horizontal sketch (see below) |
 
 Script/CLI only (not in the form): `circles` (circle ids `"c1"` or `{id, sketch}`, empty = selection) and `sketch` (sketch id/name when no sketch is open).
 There, `up` also takes an angle directly, e.g. `"300"`. `overhang_angle` (degrees from the horizontal) builds the teardrop with an angle constraint instead of the height and takes precedence over `tip_extra`.

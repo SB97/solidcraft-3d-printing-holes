@@ -28,7 +28,6 @@ struct Options {
     sketch: Option<Value>,
     up: UpSpec,
     tip: TipSpec,
-    flat: Option<String>,
     /// Warn when `up: auto` meets a horizontal sketch and falls back to sketch +Y.
     warn_horizontal: bool,
     /// No ids given: convert every circle of the open sketch instead of the selection.
@@ -154,7 +153,6 @@ fn parse_options(params: &Value) -> Result<Options> {
         sketch: params.get("sketch").cloned().filter(|s| !s.is_null()),
         up,
         tip,
-        flat: expr_field(params, "flat_top")?,
         warn_horizontal,
     })
 }
@@ -441,30 +439,21 @@ fn convert(host: &mut dyn Host, opts: &Options, up_spec: &UpSpec, id: &str) -> R
         TipSpec::Angle(_) => None,
         TipSpec::Height(e) => Some(substitute_r(e, &r_expr)),
     };
-    let flat_expr = opts.flat.as_ref().map(|e| substitute_r(e, &r_expr));
     let tip = match (&opts.tip, &tip_expr) {
         (_, Some(e)) => Tip::Height(evaluate(host, "tip_height", e)?),
         (TipSpec::Angle(a), None) => Tip::Angle(*a),
         (TipSpec::Height(_), None) => unreachable!("a height always has an expression"),
     };
-    let flat = match &flat_expr {
-        None => None,
-        Some(e) => Some(evaluate(host, "flat_top", e)?),
-    };
-    let td = geometry::teardrop(info.center_at, info.radius, up, tip, flat).map_err(|e| {
-        let field = if e.starts_with("flat_top") { "flat_top" } else if e.contains("tip") { "tip_height" } else { "overhang_angle" };
+    let td = geometry::teardrop(info.center_at, info.radius, up, tip).map_err(|e| {
+        let field = if e.contains("tip") { "tip_height" } else { "overhang_angle" };
         Error::input(field, e)
     })?;
     let dof_before = sk.get("dof").and_then(Value::as_u64);
 
-    // 1. The "up" axis: a construction line from the centre to the tip (or the cap's middle).
-    let up_end = match td.cap {
-        Some((a, b)) => Vec2::new((a.x + b.x) / 2.0, (a.y + b.y) / 2.0),
-        None => td.tip,
-    };
+    // 1. The "up" axis: a construction line from the centre to the tip.
     let r = host.run(
         "sketch.line",
-        &json!({"points": [info.center, pt(up_end)], "construction": true, "connect": false, "infer": false}),
+        &json!({"points": [info.center, pt(td.tip)], "construction": true, "connect": false, "infer": false}),
     )?;
     let up_line = first_created(&r, "curves", "sketch.line")?;
     let up_tip = format!("{up_line}.end");
@@ -477,33 +466,13 @@ fn convert(host: &mut dyn Host, opts: &Options, up_spec: &UpSpec, id: &str) -> R
     let arc = first_created(&r, "curves", "sketch.arc.center_point")?;
     let (arc_start, arc_end) = (format!("{arc}.start"), format!("{arc}.end"));
 
-    // 3. The flanks (and the cap).
-    let (left, right, cap) = match td.cap {
-        None => {
-            let r = host.run(
-                "sketch.line",
-                &json!({"points": [arc_start, up_tip, arc_end], "infer": false}),
-            )?;
-            let c = created(&r, "curves");
-            if c.len() != 2 {
-                return Err(Error::command("sketch.line", format!("expected 2 flanks, got {c:?}")));
-            }
-            (c[0].clone(), c[1].clone(), None)
-        }
-        Some((a, b)) => {
-            let r = host.run(
-                "sketch.line",
-                &json!({"points": [arc_start, pt(a), pt(b), arc_end], "infer": false}),
-            )?;
-            let c = created(&r, "curves");
-            if c.len() != 3 {
-                return Err(Error::command("sketch.line", format!("expected 2 flanks and a cap, got {c:?}")));
-            }
-            host.run("sketch.constraint.coincident", &json!({"a": up_tip, "b": {"midpoint": c[1]}}))?;
-            host.run("sketch.constraint.perpendicular", &json!({"a": c[1], "b": up_line}))?;
-            (c[0].clone(), c[2].clone(), Some(c[1].clone()))
-        }
-    };
+    // 3. The flanks.
+    let r = host.run("sketch.line", &json!({"points": [arc_start, up_tip, arc_end], "infer": false}))?;
+    let c = created(&r, "curves");
+    if c.len() != 2 {
+        return Err(Error::command("sketch.line", format!("expected 2 flanks, got {c:?}")));
+    }
+    let (left, right) = (c[0].clone(), c[1].clone());
     host.run("sketch.constraint.tangent", &json!({"a": left, "b": arc}))?;
     host.run("sketch.constraint.tangent", &json!({"a": right, "b": arc}))?;
 
@@ -540,24 +509,15 @@ fn convert(host: &mut dyn Host, opts: &Options, up_spec: &UpSpec, id: &str) -> R
         )?;
     }
 
-    // 6. Size the tip.
-    let apex = match (&tip_expr, &flat_expr) {
-        (None, _) => Some(format!("{} deg", num_fmt(td.apex_deg))),
-        (Some(_), None) => None,
-        // Flat top with a tip height: the tip is virtual, so hold the flank angle by expression.
-        (Some(h), Some(_)) => Some(format!("2 * asin(({r_expr}) / ({h}))")),
-    };
-    if let Some(a) = &apex {
-        host.run("sketch.dimension", &json!({"entities": [left, right], "type": "angle", "value": a}))?;
-    }
-    match (&tip_expr, &flat_expr) {
-        (_, Some(f)) => {
-            host.run("sketch.dimension", &json!({"entities": [up_line], "type": "length", "value": f}))?;
-        }
-        (Some(h), None) => {
+    // 6. Size the tip: a length expression on the up-line, or the apex angle for an overhang angle.
+    match &tip_expr {
+        Some(h) => {
             host.run("sketch.dimension", &json!({"entities": [up_line], "type": "length", "value": h}))?;
         }
-        (None, None) => {}
+        None => {
+            let a = format!("{} deg", num_fmt(td.apex_deg));
+            host.run("sketch.dimension", &json!({"entities": [left, right], "type": "angle", "value": a}))?;
+        }
     }
 
     // 7. Check the solve.
@@ -573,7 +533,7 @@ fn convert(host: &mut dyn Host, opts: &Options, up_spec: &UpSpec, id: &str) -> R
             warnings.push(format!("the sketch has {a} degrees of freedom, {b} before"));
         }
     }
-    let mut out = json!({
+    let out = json!({
         "circle": id,
         "arc": arc,
         "flanks": [left, right],
@@ -585,10 +545,6 @@ fn convert(host: &mut dyn Host, opts: &Options, up_spec: &UpSpec, id: &str) -> R
         "dof": dof_after,
         "warnings": warnings,
     });
-    if let Some(c) = cap {
-        out["cap"] = json!(c);
-        out["flat_top"] = json!(flat);
-    }
     Ok(out)
 }
 
@@ -655,11 +611,10 @@ mod tests {
         let o = parse_options(&json!({})).unwrap();
         assert_eq!(o.up, UpSpec::Auto);
         assert_eq!(o.tip, TipSpec::Height("1.05 * r".into()));
-        assert!(o.flat.is_none() && o.circles.is_empty() && o.warn_horizontal);
-        let o = parse_options(&json!({"circles": ["c1", {"id": "c4", "sketch": 2}], "tip_height": "", "flat_top": 3, "up": "+x"})).unwrap();
+        assert!(o.circles.is_empty() && o.warn_horizontal);
+        let o = parse_options(&json!({"circles": ["c1", {"id": "c4", "sketch": 2}], "tip_height": "", "up": "+x"})).unwrap();
         assert_eq!(o.circles.len(), 2);
         assert_eq!(o.tip, TipSpec::Height("1.05 * r".into()));
-        assert_eq!(o.flat.as_deref(), Some("3 mm"));
         assert_eq!(o.up, UpSpec::Explicit(Vec2::new(1.0, 0.0)));
         assert!(parse_options(&json!({"overhang_angle": 95})).is_err());
         assert!(parse_options(&json!({"up": "oben"})).is_err());
@@ -681,11 +636,11 @@ mod tests {
     /// What the generated form sends: every field, with its defaults.
     #[test]
     fn options_from_form() {
-        let form = json!({"up": "auto", "up_angle": 90, "warn_horizontal": true, "tip_extra": 5, "tip_height": "", "flat_top": ""});
+        let form = json!({"up": "auto", "up_angle": 90, "warn_horizontal": true, "tip_extra": 5, "tip_height": ""});
         let o = parse_options(&form).unwrap();
         assert_eq!(o.up, UpSpec::Auto);
         assert_eq!(o.tip, TipSpec::Height("1.05 * r".into()));
-        assert!(o.flat.is_none() && o.circles.is_empty() && o.sketch.is_none() && o.warn_horizontal);
+        assert!(o.circles.is_empty() && o.sketch.is_none() && o.warn_horizontal);
         assert!(!parse_options(&json!({"warn_horizontal": false})).unwrap().warn_horizontal);
         assert!(parse_options(&json!({"warn_horizontal": "no"})).is_err());
         let o = parse_options(&json!({"up": "angle", "up_angle": 180})).unwrap();

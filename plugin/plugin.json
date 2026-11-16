@@ -73,12 +73,6 @@
               "title": "Tip height",
               "description": "Optional override: distance from the centre to the tip, in mm or an expression where r is the radius (e.g. r + 0.3 mm, or r*sqrt(2) for a classic 45 deg teardrop). Empty: from Tip above circle.",
               "default": ""
-            },
-            "flat_top": {
-              "type": "string",
-              "title": "Flat top at",
-              "description": "Optional: cut the tip flat at this distance from the centre, in mm or an expression in r (e.g. r or 1.1*r). Empty: pointed tip.",
-              "default": ""
             }
           }
         }
@@ -97,8 +91,6 @@
       "sketch.delete",
       "sketch.dimension",
       "sketch.constraint.tangent",
-      "sketch.constraint.coincident",
-      "sketch.constraint.perpendicular",
       "sketch.constraint.horizontal_vertical"
     ]
   }
