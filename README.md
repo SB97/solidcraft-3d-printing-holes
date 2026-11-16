@@ -44,12 +44,12 @@ In the order the form shows them:
 | **Apply to all circles in sketch** (`apply_to_all`) | off | Off = only the selected sketch circles; on = all (non-construction) circles of the open sketch |
 | **Tip above circle (% of Ø)** (`tip_extra_d`) | `2.5` | How far the tip rises above the circle, in percent of the diameter: the hole gets that much taller at the top |
 | **Tip height** (`tip_height`) | empty | Override: distance centre → tip, in mm or as an expression with `r` = radius and `d` = diameter, e.g. `d/2 + 0.3 mm` or `d*sqrt(2)/2` (classic 45°) |
-| **Up (tip direction)** (`up`) | `auto` | Direction of the tip: `auto` = world +Z (print direction) projected into the sketch plane; `+x`, `-x`, `+y`, `-y` = sketch axes; `angle` = the angle from **Up angle** |
-| **Up angle (deg)** (`up_angle`) | `90` | Only with Up = `angle`: angle in degrees from the sketch X axis (90 = sketch +Y) |
-| **Warn on horizontal sketch** (`warn_horizontal`) | on | Warn when Up = `auto` finds no direction on a horizontal sketch (see below) |
+| **Tip direction** (`up`) | `world +Z (print up)` | Direction of the tip: `world +Z (print up)` = world +Z projected into the sketch plane (the usual print direction); `sketch +X`, `sketch -X`, `sketch +Y`, `sketch -Y` = the sketch's own axes; `angle in sketch` = the angle from **Tip angle in sketch** |
+| **Tip angle in sketch (deg)** (`up_angle`) | `90` | Only with Tip direction = `angle in sketch`: angle in degrees from sketch +X, counter-clockwise (90 = sketch +Y) |
+| **Warn on horizontal sketch** (`warn_horizontal`) | on | Warn when Tip direction = `world +Z` finds no direction on a horizontal sketch (see below) |
 
 Script/CLI only (not in the form): `tip_extra` (older form of `tip_extra_d`, in percent of the radius; `tip_extra_d` wins), `scope` (older form of `apply_to_all`: `"selected"` or `"all in sketch"`), `circles` (circle ids `"c1"` or `{id, sketch}`, empty = selection) and `sketch` (sketch id/name when no sketch is open).
-There, `up` also takes an angle directly, e.g. `"300"`. `overhang_angle` (degrees from the horizontal) builds the teardrop with an angle constraint instead of the height and takes precedence over `tip_extra_d`.
+There, `up` also takes an angle directly, e.g. `"300"`, and the older values `auto`, `+x`, `-x`, `+y`, `-y`, `angle`. `overhang_angle` (degrees from the horizontal) builds the teardrop with an angle constraint instead of the height and takes precedence over `tip_extra_d`.
 
 ### Formulas
 
@@ -63,9 +63,9 @@ The sag is more of a fixed distance (one or two layer heights) than a fraction o
 For very large or very small holes an expression like `tip_height = d/2 + 0.3 mm` is often a better fit.
 
 **Horizontal sketches:** the CAD orientation is not always the print orientation.
-On a horizontal sketch, Up = `auto` gives no direction, so the tip points to sketch +Y.
+On a horizontal sketch, Tip direction = `world +Z (print up)` gives no direction, so the tip points to sketch +Y.
 The plugin warns about it; with **Warn on horizontal sketch** = off it stays quiet.
-If the part is printed in a different orientation than it is modelled, set Up directly.
+If the part is printed in a different orientation than it is modelled, set Tip direction to a sketch axis or an angle.
 
 Constraints that were attached to the circle (e.g. tangent to something) are lost; the plugin reports them as a warning.
 It is best to convert the circle before extruding.

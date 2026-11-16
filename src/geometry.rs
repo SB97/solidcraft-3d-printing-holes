@@ -44,7 +44,7 @@ impl Vec2 {
     }
 }
 
-/// Minimum tilt between the sketch plane and the horizontal (in sin) for `up: auto`.
+/// Minimum tilt between the sketch plane and the horizontal (in sin) for `up` = world +Z.
 /// Below that world +Z gives no usable direction in the sketch.
 pub const MIN_AUTO_UP: f64 = 0.17; // ~10°
 
@@ -69,7 +69,7 @@ pub fn parse_up(text: &str) -> Result<Vec2, String> {
         _ => {
             let num = t.trim_end_matches("deg").trim_end_matches('°').trim();
             let a: f64 = num.parse().map_err(|_| {
-                format!("`{text}` is not auto, +x, -x, +y, -y or an angle in degrees")
+                format!("`{text}` is not world +Z, a sketch axis (+X, -X, +Y, -Y) or an angle in degrees")
             })?;
             let r = a.to_radians();
             Vec2::new(r.cos(), r.sin())

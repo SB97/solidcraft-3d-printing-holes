@@ -74,7 +74,7 @@ const tail = (r2, extrude = {}) => [
 ];
 
 /** Every form field at its manifest default, as the generated dialog submits them. */
-const FORM = { apply_to_all: false, up: "auto", up_angle: 90, warn_horizontal: true, tip_extra_d: 2.5, tip_height: "" };
+const FORM = { apply_to_all: false, up: "world +Z (print up)", up_angle: 90, warn_horizontal: true, tip_extra_d: 2.5, tip_height: "" };
 
 /** A pointed tip at k * r: the flanks touch the circle at acos(1/k) from up. */
 const low = (k) => (r) => area(r, { phiDeg: (Math.acos(1 / k) * 180) / PI, d: k * r });
@@ -82,7 +82,7 @@ const S30 = Math.sin(PI / 6), C30 = Math.cos(PI / 6);
 
 const scenarios = [
   {
-    name: "default: tip 2.5 % of the diameter above the circle, from selection, up = auto (world +Z)",
+    name: "default: tip 2.5 % of the diameter above the circle, from selection, tip direction = world +Z",
     steps: [...base(), plugin({}), ...tail(6)],
     tipExpr: "hole_r + 2 * hole_r * 2.5 / 100",
     area: low(1.05),
@@ -163,8 +163,8 @@ const scenarios = [
     tipZ: (r) => CZ + 1.05 * r,
   },
   {
-    name: "form: up = angle, up_angle 300",
-    steps: [...base(), plugin({ ...FORM, up: "angle", up_angle: 300 }), ...tail(6)],
+    name: "form: Tip direction = angle in sketch, 300°",
+    steps: [...base(), plugin({ ...FORM, up: "angle in sketch", up_angle: 300 }), ...tail(6)],
     area: low(1.05),
     tipZ: (r) => CZ + 1.05 * r * C30,
     tipX: (r) => 1.05 * r * S30,
@@ -212,12 +212,12 @@ for (const s of scenarios) {
   check("volume r=6 (parametric)", res[n - 1].total.volume_mm3, BLOCK - s.area(6) * DEPTH);
 }
 
-// A horizontal sketch with up = auto: no refusal, the tip goes to sketch +Y (here world +Y),
+// A horizontal sketch with tip direction = world +Z: no refusal, the tip goes to sketch +Y (here world +Y),
 // with a warning unless warn_horizontal is off.
 console.log("\n# horizontal sketch");
 for (const [name, extra, wantWarning] of [
-  ["XY sketch, up = auto: warns", {}, true],
-  ["XY sketch, up = auto, warn_horizontal off: silent", { warn_horizontal: false }, false],
+  ["XY sketch, tip direction = world +Z: warns", {}, true],
+  ["XY sketch, tip direction = world +Z, warn_horizontal off: silent", { warn_horizontal: false }, false],
 ]) {
   const steps = [
     { command: "sketch.create", params: { plane: "XY" } },

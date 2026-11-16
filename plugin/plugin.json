@@ -33,28 +33,28 @@
             },
             "up": {
               "type": "string",
-              "title": "Up (tip direction)",
-              "description": "Where the tip points. auto = world +Z (the print direction) projected into the sketch; +x, -x, +y, -y = sketch axes; angle = the angle below.",
+              "title": "Tip direction",
+              "description": "Where the tip points. world +Z (print up) = world +Z projected into the sketch plane, the usual print direction; sketch +X / -X / +Y / -Y = the sketch's own axes; angle in sketch = the Tip angle below.",
               "enum": [
-                "auto",
-                "+x",
-                "-x",
-                "+y",
-                "-y",
-                "angle"
+                "world +Z (print up)",
+                "sketch +X",
+                "sketch -X",
+                "sketch +Y",
+                "sketch -Y",
+                "angle in sketch"
               ],
-              "default": "auto"
+              "default": "world +Z (print up)"
             },
             "up_angle": {
               "type": "number",
-              "title": "Up angle (deg)",
-              "description": "Only with Up = angle: direction of the tip in degrees from sketch X (90 = sketch +Y).",
+              "title": "Tip angle in sketch (deg)",
+              "description": "Only with Tip direction = angle in sketch: direction of the tip in degrees from sketch +X, counter-clockwise (90 = sketch +Y).",
               "default": 90
             },
             "warn_horizontal": {
               "type": "boolean",
               "title": "Warn on horizontal sketch",
-              "description": "With Up = auto on a horizontal sketch, world +Z gives no direction and the tip points to sketch +Y. Warn about it (turn off when the part prints in another orientation anyway).",
+              "description": "With Tip direction = world +Z on a horizontal sketch, world +Z gives no direction and the tip points to sketch +Y. Warn about it (turn off when the part prints in another orientation anyway).",
               "default": true
             },
             "tip_extra_d": {
