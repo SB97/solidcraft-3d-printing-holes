@@ -236,6 +236,42 @@ for (const [name, extra, wantWarning] of [
   check("up-line end world Y", upEnd.world[1], 1.05 * 3);
 }
 
+// An empty design with nothing selected and no sketch open (as the plugin list's nightly test runs
+// it, with params {}): the plugin draws an example hole of diameter hole_d on XZ at the origin,
+// adding hole_d = 5 mm or using the design's own.
+console.log("\n# example hole on an empty start");
+for (const [name, pre, d] of [
+  ["empty design, params {}", [], 5],
+  ["design with its own hole_d = 8 mm", [{ command: "parameters.add", params: { name: "hole_d", expression: "8 mm" } }], 8],
+]) {
+  const steps = [
+    ...pre,
+    plugin({}),
+    { command: "document.inspect", params: { timeline: false, bodies: false, measure: false } },
+    { command: "sketch.edit", params: { sketch: "Teardrop" } },
+    { command: "sketch.inspect", params: {} },
+  ];
+  const r = run(steps);
+  if (r.error) {
+    failed++;
+    console.log(`  FAIL ${name}: ${r.error.split("\n")[0].slice(0, 300)}`);
+    continue;
+  }
+  const res = r.results.slice(pre.length);
+  const out = res[0].result;
+  const ok = out.example === true && res[1].active_sketch == null;
+  if (!ok) failed++;
+  console.log(`  ${ok ? "ok  " : "FAIL"} ${name}: example drawn, sketch finished afterwards`);
+  const conv = out.converted[0];
+  if (conv.warnings.length) console.log("  warnings:", conv.warnings);
+  const sk = res[3];
+  if (sk.dof !== 0) failed++;
+  console.log(`  ${sk.dof === 0 ? "ok  " : "FAIL"} dof ${sk.dof}`);
+  check("radius", conv.radius, d / 2);
+  const upEnd = sk.points.find((p) => p.id === `${conv.up_line}.end`);
+  check("up-line end world Z", upEnd.world[2], 1.05 * (d / 2));
+}
+
 // Refusals: a tip below the circle.
 console.log("\n# refusals");
 for (const [name, steps, needle] of [

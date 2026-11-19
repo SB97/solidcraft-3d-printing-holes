@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A SolidCraft CAD plugin (`solidcraft-3d-printing-holes`), written in Rust and compiled to a WebAssembly component. Its one entry so far, `teardrop`, turns selected sketch circles into constrained teardrop profiles (by default a low tip 2.5 % of the diameter above the circle, `tip_extra_d`; a classic 45° overhang via `overhang_angle` or `tip_height`) so that horizontal holes print without supports. The README (English) is the user-facing doc: it covers fields, formulas and install steps. Its first picture (`docs/teardrop.png`, not SVG) is the card image on the plugin list at tharje.github.io/solidcraft-plugins.
+A SolidCraft CAD plugin (`solidcraft-3d-printing-holes`), written in Rust and compiled to a WebAssembly component. Its one entry so far, `teardrop`, turns selected sketch circles into constrained teardrop profiles (by default a low tip 2.5 % of the diameter above the circle, `tip_extra_d`; a classic 45° overhang via `overhang_angle` or `tip_height`) so that horizontal holes print without supports. With nothing selected and no sketch open it draws an example hole (XZ sketch, Ø `hole_d`) instead of failing: the plugin list's nightly test (`scripts/compat.py` in tharje/solidcraft-plugins) runs every entry with `params: {}` on an empty design, and only a clean run earns the "✓ Runs in SolidCraft" badge. The README (English) is the user-facing doc: it covers fields, formulas and install steps. Its first picture (`docs/teardrop.png`, not SVG) is the card image on the plugin list at tharje.github.io/solidcraft-plugins.
 
 ## Commands
 

@@ -25,6 +25,10 @@ sketch, converts the circle in its own sketch and then reopens the sketch you we
 If the plugin finds no selected circle, the error message says what was selected instead.
 Alternatively, tick **Apply to all circles in sketch** to convert every circle of the open sketch without selecting anything.
 
+With **nothing selected and no sketch open** (e.g. in a new design), the plugin draws an example instead:
+a sketch `Teardrop` on the XZ plane with a teardrop hole on the origin whose diameter is the parameter `hole_d`
+(added at 5 mm, or the design's own `hole_d` if it already has one).
+
 SolidCraft builds the form itself from the input schema in the manifest.
 The whole run is a single undo step.
 

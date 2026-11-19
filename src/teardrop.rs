@@ -611,8 +611,57 @@ fn convert(host: &mut dyn Host, opts: &Options, up_spec: &UpSpec, id: &str) -> R
     Ok(out)
 }
 
+/// Parameter and diameter of the example hole drawn on an empty start (see `wants_example`).
+const EXAMPLE_PARAM: &str = "hole_d";
+const EXAMPLE_D: &str = "5 mm";
+
+/// Nothing to work on at all: no circle ids, no sketch named or open, nothing selected. Then the
+/// run draws an example hole instead of failing, so the entry also runs on its own (an empty
+/// design, as the plugin list's nightly test does). A selection without circles, or an open
+/// sketch, still gets the error that explains what is missing.
+fn wants_example(host: &mut dyn Host, opts: &Options) -> Result<bool> {
+    if !opts.circles.is_empty() || opts.sketch.is_some() || opts.all_in_sketch {
+        return Ok(false);
+    }
+    let sel = host.run("selection.get", &json!({"detail": true}))?;
+    if sel.get("items").and_then(Value::as_array).is_some_and(|a| !a.is_empty()) {
+        return Ok(false);
+    }
+    let doc = host.run("document.inspect", &json!({"timeline": false, "bodies": false, "measure": false}))?;
+    Ok(doc.get("active_sketch").is_none_or(Value::is_null))
+}
+
+/// Draw the example: a sketch on the vertical XZ plane (so world +Z gives the tip a direction)
+/// with a circle on the origin whose diameter is the parameter `hole_d` (added at 5 mm, or the
+/// design's own when it has one). Returns the circle's id; the sketch is left open.
+fn draw_example(host: &mut dyn Host) -> Result<String> {
+    let known = host.run("expr.evaluate", &json!({"expression": EXAMPLE_PARAM, "kind": "length"}))?;
+    if known.get("ok").and_then(Value::as_bool) != Some(true) {
+        host.run(
+            "parameters.add",
+            &json!({"name": EXAMPLE_PARAM, "expression": EXAMPLE_D, "comment": "Teardrop example hole"}),
+        )?;
+    }
+    host.run("sketch.create", &json!({"plane": "XZ", "name": "Teardrop"}))?;
+    let r = host.run("sketch.circle.center", &json!({"center": [0, 0], "diameter": EXAMPLE_PARAM}))?;
+    first_created(&r, "curves", "sketch.circle.center")
+}
+
 pub fn run(host: &mut dyn Host, params: &Value) -> Result<Value> {
     let opts = parse_options(params)?;
+    if wants_example(host, &opts)? {
+        let id = draw_example(host)?;
+        host.log(&format!(
+            "teardrop: nothing selected and no sketch open, so an example hole was drawn: \
+             sketch `Teardrop` on XZ, Ø `{EXAMPLE_PARAM}`"
+        ));
+        let out = convert(host, &opts, &opts.up, &id)?;
+        for w in out["warnings"].as_array().into_iter().flatten().filter_map(Value::as_str) {
+            host.warn(&format!("teardrop: {w}"));
+        }
+        host.run("sketch.finish", &json!({}))?;
+        return Ok(json!({"converted": [out], "example": true}));
+    }
     let all = opts.circles.is_empty() && opts.all_in_sketch;
     let (sketch, mut ids, from_selection) =
         if all { (opts.sketch.clone(), Vec::new(), false) } else { resolve_targets(host, &opts)? };

@@ -1,6 +1,6 @@
 [package]
 name = "solidcraft-3d-printing-holes"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 description = "SolidCraft plugin: 3D-print friendly holes (teardrop, ...)"
 license = "MIT"
