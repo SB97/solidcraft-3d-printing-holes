@@ -62,7 +62,10 @@ mod component {
                 crate::host::Error::Command { command, reason } => {
                     PluginError::CommandFailed(CommandFailure { command, reason })
                 }
+                // SolidCraft 0.48 shows only `reason` of an invalid input, so name the field in it:
+                // a script or MCP caller has no form to point at the field.
                 crate::host::Error::Input { field, reason } => {
+                    let reason = format!("{field}: {reason}");
                     PluginError::InvalidInput(FieldFailure { field, reason })
                 }
                 crate::host::Error::Host(m) => PluginError::Trap(m),
